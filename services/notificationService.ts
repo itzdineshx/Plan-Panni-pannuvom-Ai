@@ -177,15 +177,50 @@ export function checkMilestoneAlerts(milestones: Milestone[]): AppNotification[]
   return generated;
 }
 
-/** Push a chatbot response notification (when chat overlay is closed) */
-export function notifyChatbotResponse(summary: string): void {
-  addNotification({
-    type: 'chatbot',
-    title: 'AI Response Ready',
-    message: summary.length > 100 ? summary.slice(0, 100) + '…' : summary,
-  });
-  sendBrowserNotification('AcademiGen AI', {
-    body: summary.length > 100 ? summary.slice(0, 100) + '…' : summary,
-    tag: 'chatbot-response',
-  });
+/** Check tasks for upcoming deadlines and send reminders */
+export function checkDeadlineReminders(tasks: Task[]): AppNotification[] {
+  const today = todayISO();
+  const generated: AppNotification[] = [];
+
+  for (const task of tasks) {
+    if (task.status === 'done') continue;
+
+    if (task.deadline && task.deadline !== 'No Deadline') {
+      const daysLeft = Math.ceil((new Date(task.deadline).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+
+      // Send reminder for tasks due in 3 days or less
+      if (daysLeft <= 3 && daysLeft >= 0) {
+        const existing = notifications.find(
+          n => n.type === 'info' && n.relatedTaskId === task.id && n.message.includes('due in')
+        );
+        if (!existing) {
+          const n = addNotification({
+            type: 'info',
+            title: 'Upcoming Deadline',
+            message: `"${task.title}" is due in ${daysLeft} day${daysLeft !== 1 ? 's' : ''} (${task.deadline}).`,
+            relatedTaskId: task.id,
+          });
+          generated.push(n);
+        }
+      }
+
+      // Send reminder for tasks due today
+      if (daysLeft === 0) {
+        const existing = notifications.find(
+          n => n.type === 'info' && n.relatedTaskId === task.id && n.message.includes('due today')
+        );
+        if (!existing) {
+          const n = addNotification({
+            type: 'info',
+            title: 'Task Due Today',
+            message: `"${task.title}" is due today! Make sure to complete it.`,
+            relatedTaskId: task.id,
+          });
+          generated.push(n);
+        }
+      }
+    }
+  }
+
+  return generated;
 }

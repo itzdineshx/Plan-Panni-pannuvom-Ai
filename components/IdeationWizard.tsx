@@ -84,6 +84,48 @@ const IdeationWizard: React.FC<Props> = ({ onComplete }) => {
         geminiService.generateGuidance(idea)
       ]);
       
+      // Generate initial tasks for the project
+      setLoadingStep('Generating project tasks...');
+      const taskBreakdowns = await geminiService.generateTaskBreakdown({
+        title: idea.title!,
+        problemStatement: idea.problemStatement!,
+        solutionIdea: idea.solutionIdea!,
+        techStack: guidance.techStack,
+      }, ['Aditya Verma']); // Default team member
+
+      // Convert task breakdowns to actual tasks
+      const generatedTasks = taskBreakdowns.flatMap(breakdown => {
+        const parentTaskId = Math.random().toString(36).substr(2, 9);
+        const parentTask = {
+          id: parentTaskId,
+          title: breakdown.parentTask,
+          description: `Parent task for ${breakdown.parentTask}`,
+          assignedTo: 'Aditya Verma',
+          status: 'todo' as const,
+          deadline: 'No Deadline',
+          priority: 'medium' as const,
+          priorityScore: 0,
+          complexity: 3 as const,
+          estimatedHours: breakdown.subtasks.reduce((sum, sub) => sum + sub.estimatedHours, 0),
+          dependencies: [],
+          subtasks: breakdown.subtasks.map(() => Math.random().toString(36).substr(2, 9)),
+          tags: ['auto-generated'],
+        };
+
+        const subtasks = breakdown.subtasks.map(sub => ({
+          ...sub,
+          id: Math.random().toString(36).substr(2, 9),
+          status: 'todo' as const,
+          priorityScore: 0,
+          dependencies: [],
+          subtasks: [],
+          tags: ['auto-generated'],
+          parentTaskId: parentTaskId,
+        }));
+
+        return [parentTask, ...subtasks];
+      });
+
       const fullProject: Project = {
         id: Math.random().toString(36).substr(2, 9),
         title: idea.title!,
@@ -100,7 +142,7 @@ const IdeationWizard: React.FC<Props> = ({ onComplete }) => {
         implementationStrategy: guidance.implementationStrategy,
         learningResources: guidance.learningResources,
         vivaQuestions: [],
-        tasks: [],
+        tasks: generatedTasks,
         sources: sources,
         status: 'planning'
       };

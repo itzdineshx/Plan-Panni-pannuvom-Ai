@@ -181,4 +181,4 @@ export interface TaskBreakdown {
   subtasks: Omit<Task, 'id' | 'priorityScore' | 'scheduledStart' | 'scheduledEnd' | 'criticalPath'>[];
 }
 
-export type AppView = 'dashboard' | 'ideation' | 'guidance' | 'docs' | 'collaboration' | 'viva';
+export type AppView = 'dashboard' | 'ideation' | 'guidance' | 'docs' | 'collaboration' | 'viva' | 'tasks';

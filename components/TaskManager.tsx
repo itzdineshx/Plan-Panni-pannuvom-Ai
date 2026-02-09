@@ -1,0 +1,532 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import {
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import {
+  Plus,
+  Edit3,
+  Trash2,
+  Calendar,
+  Clock,
+  User,
+  AlertTriangle,
+  CheckCircle2,
+  Circle,
+  PlayCircle,
+  XCircle,
+  ChevronDown,
+  ChevronRight,
+  BarChart3,
+  TrendingUp,
+  Target,
+  Zap
+} from 'lucide-react';
+import { Project, Task, TaskPriority, TaskComplexity } from '../types';
+import { rankTasks, computePriorityScore } from '../services/taskBreakdownService';
+import { checkTaskAlerts, checkDeadlineReminders } from '../services/notificationService';
+
+interface Props {
+  project: Project;
+  onUpdateProject: (project: Project) => void;
+}
+
+interface SortableTaskItemProps {
+  task: Task;
+  allTasks: Task[];
+  onUpdate: (task: Task) => void;
+  onDelete: (taskId: string) => void;
+  onToggleSubtasks: (taskId: string) => void;
+  expandedTasks: Set<string>;
+  level: number;
+}
+
+const SortableTaskItem: React.FC<SortableTaskItemProps> = ({
+  task,
+  allTasks,
+  onUpdate,
+  onDelete,
+  onToggleSubtasks,
+  expandedTasks,
+  level
+}) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: task.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  const subtasks = task.subtasks?.map(id => allTasks.find(t => t.id === id)).filter(Boolean) || [];
+  const hasSubtasks = subtasks.length > 0;
+  const isExpanded = expandedTasks.has(task.id);
+
+  const getStatusIcon = (status: Task['status']) => {
+    switch (status) {
+      case 'done': return <CheckCircle2 size={16} className="text-emerald-500" />;
+      case 'in-progress': return <PlayCircle size={16} className="text-blue-500" />;
+      case 'blocked': return <XCircle size={16} className="text-red-500" />;
+      default: return <Circle size={16} className="text-slate-400" />;
+    }
+  };
+
+  const getPriorityColor = (priority: TaskPriority) => {
+    switch (priority) {
+      case TaskPriority.Critical: return 'bg-red-100 text-red-700 border-red-200';
+      case TaskPriority.High: return 'bg-orange-100 text-orange-700 border-orange-200';
+      case TaskPriority.Medium: return 'bg-yellow-100 text-yellow-700 border-yellow-200';
+      case TaskPriority.Low: return 'bg-green-100 text-green-700 border-green-200';
+    }
+  };
+
+  const daysUntilDeadline = task.deadline && task.deadline !== 'No Deadline'
+    ? Math.ceil((new Date(task.deadline).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+    : null;
+
+  const isOverdue = daysUntilDeadline !== null && daysUntilDeadline < 0;
+  const isDueSoon = daysUntilDeadline !== null && daysUntilDeadline <= 3 && daysUntilDeadline >= 0;
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`bg-white border border-slate-200 rounded-xl p-4 mb-3 shadow-sm hover:shadow-md transition-all ${
+        isDragging ? 'opacity-50 shadow-lg' : ''
+      } ${level > 0 ? 'ml-6 border-l-4 border-l-indigo-300' : ''}`}
+    >
+      <div className="flex items-start gap-3">
+        <div
+          {...attributes}
+          {...listeners}
+          className="mt-1 cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-600"
+        >
+          ⋮⋮
+        </div>
+
+        <button
+          onClick={() => onToggleSubtasks(task.id)}
+          className={`mt-1 ${hasSubtasks ? 'text-slate-600 hover:text-slate-800' : 'text-slate-300 cursor-default'}`}
+          disabled={!hasSubtasks}
+        >
+          {hasSubtasks ? (
+            isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />
+          ) : (
+            <div className="w-4" />
+          )}
+        </button>
+
+        <div className="flex-1">
+          <div className="flex items-start justify-between mb-2">
+            <div className="flex items-center gap-2">
+              {getStatusIcon(task.status)}
+              <h4 className={`font-medium ${task.status === 'done' ? 'line-through text-slate-500' : 'text-slate-800'}`}>
+                {task.title}
+              </h4>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={`px-2 py-1 text-xs font-medium rounded-full border ${getPriorityColor(task.priority)}`}>
+                {task.priority}
+              </span>
+              <button
+                onClick={() => onUpdate({ ...task, status: task.status === 'done' ? 'todo' : 'done' })}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <Edit3 size={14} />
+              </button>
+              <button
+                onClick={() => onDelete(task.id)}
+                className="text-slate-400 hover:text-red-500"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          </div>
+
+          {task.description && (
+            <p className="text-sm text-slate-600 mb-3">{task.description}</p>
+          )}
+
+          <div className="flex items-center gap-4 text-xs text-slate-500">
+            <div className="flex items-center gap-1">
+              <User size={12} />
+              {task.assignedTo}
+            </div>
+            <div className="flex items-center gap-1">
+              <Clock size={12} />
+              {task.estimatedHours}h
+            </div>
+            {task.deadline && task.deadline !== 'No Deadline' && (
+              <div className={`flex items-center gap-1 ${isOverdue ? 'text-red-600' : isDueSoon ? 'text-orange-600' : ''}`}>
+                <Calendar size={12} />
+                {isOverdue ? 'Overdue' : isDueSoon ? `${daysUntilDeadline}d left` : task.deadline}
+              </div>
+            )}
+            {task.complexity > 1 && (
+              <div className="flex items-center gap-1">
+                <Zap size={12} />
+                {TaskComplexity[task.complexity]}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {isExpanded && subtasks.length > 0 && (
+        <div className="mt-3 pl-8 border-l-2 border-slate-100">
+          {subtasks.map(subtask => (
+            <SortableTaskItem
+              key={subtask!.id}
+              task={subtask!}
+              allTasks={allTasks}
+              onUpdate={onUpdate}
+              onDelete={onDelete}
+              onToggleSubtasks={onToggleSubtasks}
+              expandedTasks={expandedTasks}
+              level={level + 1}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const TaskManager: React.FC<Props> = ({ project, onUpdateProject }) => {
+  const [tasks, setTasks] = useState<Task[]>(project.tasks || []);
+  const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
+  const [filter, setFilter] = useState<'all' | 'todo' | 'in-progress' | 'done'>('all');
+  const [sortBy, setSortBy] = useState<'priority' | 'deadline' | 'assignee'>('priority');
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  useEffect(() => {
+    setTasks(project.tasks || []);
+  }, [project.tasks]);
+
+  useEffect(() => {
+    // Check for task alerts and deadline reminders periodically
+    const interval = setInterval(() => {
+      checkTaskAlerts(tasks);
+      checkDeadlineReminders(tasks);
+    }, 60000); // Check every minute
+
+    return () => clearInterval(interval);
+  }, [tasks]);
+
+  const filteredAndSortedTasks = useMemo(() => {
+    let filtered = tasks.filter(task => {
+      if (filter === 'all') return true;
+      return task.status === filter;
+    });
+
+    // Sort tasks
+    switch (sortBy) {
+      case 'priority':
+        filtered = rankTasks(filtered);
+        break;
+      case 'deadline':
+        filtered.sort((a, b) => {
+          if (!a.deadline || a.deadline === 'No Deadline') return 1;
+          if (!b.deadline || b.deadline === 'No Deadline') return -1;
+          return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
+        });
+        break;
+      case 'assignee':
+        filtered.sort((a, b) => a.assignedTo.localeCompare(b.assignedTo));
+        break;
+    }
+
+    return filtered;
+  }, [tasks, filter, sortBy]);
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      const oldIndex = filteredAndSortedTasks.findIndex(task => task.id === active.id);
+      const newIndex = filteredAndSortedTasks.findIndex(task => task.id === over.id);
+
+      const reorderedTasks = arrayMove(filteredAndSortedTasks, oldIndex, newIndex);
+
+      // Update the tasks array while preserving the original order for non-filtered tasks
+      const updatedTasks = [...tasks];
+      // This is a simplified approach - in a real app, you'd want more sophisticated reordering logic
+      setTasks(reorderedTasks);
+
+      // Update project
+      onUpdateProject({
+        ...project,
+        tasks: reorderedTasks
+      });
+    }
+  };
+
+  const handleUpdateTask = (updatedTask: Task) => {
+    const updatedTasks = tasks.map(task =>
+      task.id === updatedTask.id ? { ...updatedTask, priorityScore: computePriorityScore(updatedTask, tasks) } : task
+    );
+    setTasks(updatedTasks);
+    onUpdateProject({
+      ...project,
+      tasks: updatedTasks
+    });
+    setEditingTask(null);
+  };
+
+  const handleDeleteTask = (taskId: string) => {
+    const updatedTasks = tasks.filter(task => task.id !== taskId);
+    setTasks(updatedTasks);
+    onUpdateProject({
+      ...project,
+      tasks: updatedTasks
+    });
+  };
+
+  const handleAddTask = (newTask: Omit<Task, 'id' | 'priorityScore'>) => {
+    const task: Task = {
+      ...newTask,
+      id: Math.random().toString(36).substr(2, 9),
+      priorityScore: 0,
+    };
+    task.priorityScore = computePriorityScore(task, [...tasks, task]);
+
+    const updatedTasks = [...tasks, task];
+    setTasks(updatedTasks);
+    onUpdateProject({
+      ...project,
+      tasks: updatedTasks
+    });
+    setShowAddForm(false);
+  };
+
+  const toggleSubtasks = (taskId: string) => {
+    setExpandedTasks(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(taskId)) {
+        newSet.delete(taskId);
+      } else {
+        newSet.add(taskId);
+      }
+      return newSet;
+    });
+  };
+
+  const progressStats = useMemo(() => {
+    const total = tasks.length;
+    const completed = tasks.filter(t => t.status === 'done').length;
+    const inProgress = tasks.filter(t => t.status === 'in-progress').length;
+    const overdue = tasks.filter(t => {
+      if (!t.deadline || t.deadline === 'No Deadline' || t.status === 'done') return false;
+      return new Date(t.deadline) < new Date();
+    }).length;
+
+    return { total, completed, inProgress, overdue, progress: total > 0 ? (completed / total) * 100 : 0 };
+  }, [tasks]);
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-800">Task Manager</h2>
+          <p className="text-slate-600">Manage and track your project tasks</p>
+        </div>
+        <button
+          onClick={() => setShowAddForm(true)}
+          className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+        >
+          <Plus size={18} />
+          Add Task
+        </button>
+      </div>
+
+      {/* Progress Overview */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="bg-white p-4 rounded-xl border border-slate-200">
+          <div className="flex items-center gap-2 mb-2">
+            <Target className="text-blue-500" size={20} />
+            <span className="text-sm font-medium text-slate-600">Total Tasks</span>
+          </div>
+          <p className="text-2xl font-bold text-slate-800">{progressStats.total}</p>
+        </div>
+        <div className="bg-white p-4 rounded-xl border border-slate-200">
+          <div className="flex items-center gap-2 mb-2">
+            <CheckCircle2 className="text-emerald-500" size={20} />
+            <span className="text-sm font-medium text-slate-600">Completed</span>
+          </div>
+          <p className="text-2xl font-bold text-slate-800">{progressStats.completed}</p>
+        </div>
+        <div className="bg-white p-4 rounded-xl border border-slate-200">
+          <div className="flex items-center gap-2 mb-2">
+            <PlayCircle className="text-blue-500" size={20} />
+            <span className="text-sm font-medium text-slate-600">In Progress</span>
+          </div>
+          <p className="text-2xl font-bold text-slate-800">{progressStats.inProgress}</p>
+        </div>
+        <div className="bg-white p-4 rounded-xl border border-slate-200">
+          <div className="flex items-center gap-2 mb-2">
+            <AlertTriangle className="text-red-500" size={20} />
+            <span className="text-sm font-medium text-slate-600">Overdue</span>
+          </div>
+          <p className="text-2xl font-bold text-slate-800">{progressStats.overdue}</p>
+        </div>
+      </div>
+
+      {/* Progress Bar */}
+      <div className="bg-white p-6 rounded-xl border border-slate-200">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-slate-800">Overall Progress</h3>
+          <span className="text-sm text-slate-600">{Math.round(progressStats.progress)}% Complete</span>
+        </div>
+        <div className="w-full bg-slate-200 rounded-full h-3">
+          <div
+            className="bg-indigo-600 h-3 rounded-full transition-all duration-500"
+            style={{ width: `${progressStats.progress}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Filters and Sort */}
+      <div className="flex items-center gap-4 bg-white p-4 rounded-xl border border-slate-200">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-slate-600">Filter:</span>
+          <select
+            value={filter}
+            onChange={(e) => setFilter(e.target.value as any)}
+            className="px-3 py-1 border border-slate-300 rounded-lg text-sm"
+          >
+            <option value="all">All Tasks</option>
+            <option value="todo">To Do</option>
+            <option value="in-progress">In Progress</option>
+            <option value="done">Done</option>
+          </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-slate-600">Sort by:</span>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as any)}
+            className="px-3 py-1 border border-slate-300 rounded-lg text-sm"
+          >
+            <option value="priority">Priority</option>
+            <option value="deadline">Deadline</option>
+            <option value="assignee">Assignee</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Task List */}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
+        <SortableContext items={filteredAndSortedTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
+          <div className="space-y-2">
+            {filteredAndSortedTasks.map(task => (
+              <SortableTaskItem
+                key={task.id}
+                task={task}
+                allTasks={tasks}
+                onUpdate={handleUpdateTask}
+                onDelete={handleDeleteTask}
+                onToggleSubtasks={toggleSubtasks}
+                expandedTasks={expandedTasks}
+                level={0}
+              />
+            ))}
+          </div>
+        </SortableContext>
+      </DndContext>
+
+      {filteredAndSortedTasks.length === 0 && (
+        <div className="text-center py-12 text-slate-500">
+          <CheckSquare size={48} className="mx-auto mb-4 text-slate-300" />
+          <p>No tasks found matching your filters.</p>
+        </div>
+      )}
+
+      {/* Add/Edit Task Modal would go here - simplified for now */}
+      {showAddForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-xl max-w-md w-full mx-4">
+            <h3 className="text-lg font-bold mb-4">Add New Task</h3>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.target as HTMLFormElement);
+              handleAddTask({
+                title: formData.get('title') as string,
+                description: formData.get('description') as string,
+                assignedTo: formData.get('assignee') as string,
+                status: 'todo',
+                deadline: formData.get('deadline') as string || 'No Deadline',
+                priority: formData.get('priority') as TaskPriority,
+                complexity: parseInt(formData.get('complexity') as string) as TaskComplexity,
+                estimatedHours: parseInt(formData.get('hours') as string),
+                dependencies: [],
+                subtasks: [],
+                tags: [],
+              });
+            }}>
+              <div className="space-y-4">
+                <input name="title" placeholder="Task title" required className="w-full p-2 border rounded" />
+                <textarea name="description" placeholder="Description" className="w-full p-2 border rounded" />
+                <input name="assignee" placeholder="Assigned to" required className="w-full p-2 border rounded" />
+                <input name="deadline" type="date" className="w-full p-2 border rounded" />
+                <select name="priority" required className="w-full p-2 border rounded">
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                  <option value="critical">Critical</option>
+                </select>
+                <select name="complexity" required className="w-full p-2 border rounded">
+                  <option value="1">Trivial</option>
+                  <option value="2">Simple</option>
+                  <option value="3">Moderate</option>
+                  <option value="5">Complex</option>
+                  <option value="8">Epic</option>
+                </select>
+                <input name="hours" type="number" placeholder="Estimated hours" required className="w-full p-2 border rounded" />
+              </div>
+              <div className="flex gap-2 mt-6">
+                <button type="submit" className="flex-1 bg-indigo-600 text-white py-2 rounded">Add Task</button>
+                <button type="button" onClick={() => setShowAddForm(false)} className="flex-1 border border-slate-300 py-2 rounded">Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default TaskManager;
