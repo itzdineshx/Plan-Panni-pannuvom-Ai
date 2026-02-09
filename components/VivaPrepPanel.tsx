@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Project, VivaQuestion } from '../types';
 import { 
   MessageCircle, 
@@ -9,9 +9,15 @@ import {
   RefreshCcw,
   Loader2,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Database,
+  RotateCcw,
+  Trash2
 } from 'lucide-react';
 import { geminiService } from '../services/geminiService';
+
+// In-memory cache keyed by project id
+const vivaCache = new Map<string, VivaQuestion[]>();
 
 interface Props {
   project: Project;
@@ -21,12 +27,23 @@ const VivaPrepPanel: React.FC<Props> = ({ project }) => {
   const [questions, setQuestions] = useState<VivaQuestion[]>([]);
   const [loading, setLoading] = useState(false);
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
+  const [fromCache, setFromCache] = useState(false);
+  const hasFetchedRef = useRef(false);
 
-  const fetchQuestions = async () => {
+  const fetchQuestions = async (forceRegenerate = false) => {
+    // Serve from cache unless explicitly regenerating
+    if (!forceRegenerate && vivaCache.has(project.id)) {
+      setQuestions(vivaCache.get(project.id)!);
+      setFromCache(true);
+      return;
+    }
+
     setLoading(true);
+    setFromCache(false);
     try {
       const q = await geminiService.generateVivaPrep(project);
       setQuestions(q);
+      vivaCache.set(project.id, q); // store in cache
     } catch (error) {
       console.error(error);
     } finally {
@@ -34,8 +51,27 @@ const VivaPrepPanel: React.FC<Props> = ({ project }) => {
     }
   };
 
+  const handleRegenerate = () => {
+    setExpandedIndex(null);
+    fetchQuestions(true);
+  };
+
+  const handleClearCache = () => {
+    vivaCache.delete(project.id);
+    setQuestions([]);
+    setFromCache(false);
+    setExpandedIndex(null);
+  };
+
   useEffect(() => {
-    if (project) fetchQuestions();
+    hasFetchedRef.current = false;
+  }, [project.id]);
+
+  useEffect(() => {
+    if (project && !hasFetchedRef.current) {
+      hasFetchedRef.current = true;
+      fetchQuestions();
+    }
   }, [project.id]);
 
   return (
@@ -45,14 +81,29 @@ const VivaPrepPanel: React.FC<Props> = ({ project }) => {
           <h2 className="text-3xl font-bold text-slate-800">Viva Voce Preparation</h2>
           <p className="text-slate-500 mt-1">Master your project defense with AI-predicted questions.</p>
         </div>
-        <button 
-          onClick={fetchQuestions}
-          disabled={loading}
-          className="flex items-center gap-2 text-indigo-600 font-bold px-4 py-2 rounded-xl hover:bg-indigo-50 transition-all border border-indigo-100"
-        >
-          {loading ? <Loader2 size={18} className="animate-spin" /> : <RefreshCcw size={18} />}
-          Refresh Questions
-        </button>
+        <div className="flex items-center gap-2">
+          {questions.length > 0 && (
+            <>
+              <button
+                onClick={handleRegenerate}
+                disabled={loading}
+                className="flex items-center gap-2 text-amber-600 font-bold px-4 py-2 rounded-xl hover:bg-amber-50 transition-all border border-amber-200"
+                title="Generate a fresh set of questions"
+              >
+                {loading ? <Loader2 size={18} className="animate-spin" /> : <RotateCcw size={18} />}
+                Regenerate
+              </button>
+              <button
+                onClick={handleClearCache}
+                disabled={loading}
+                className="flex items-center gap-2 text-red-500 font-medium px-3 py-2 rounded-xl hover:bg-red-50 transition-all border border-red-100"
+                title="Clear cached questions"
+              >
+                <Trash2 size={16} />
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {loading && questions.length === 0 ? (
