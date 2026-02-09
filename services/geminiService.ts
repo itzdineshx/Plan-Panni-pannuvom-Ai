@@ -272,5 +272,55 @@ export const geminiService = {
     const responseText = await chatCompletion(systemPrompt, userPrompt);
     const parsed = extractJSON(responseText);
     return parsed.phases || [];
+  },
+
+  async chatWithAI(
+    messages: { role: 'user' | 'assistant'; content: string }[],
+    projectContext?: Partial<Project> | null
+  ): Promise<string> {
+    const systemPrompt = `You are AcademiGen AI — an expert academic project assistant. You help students with project planning, research guidance, technical decisions, debugging, documentation, and viva preparation.
+
+${projectContext ? `
+CURRENT PROJECT CONTEXT:
+Title: ${projectContext.title || 'Not set'}
+Problem: ${projectContext.problemStatement || 'Not set'}
+Tech Stack: ${projectContext.techStack?.map(t => t.name).join(', ') || 'Not set'}
+Status: ${projectContext.status || 'Not set'}
+` : 'No project is currently selected.'}
+
+RULES:
+- Be concise but thorough. Use bullet points and structured formatting.
+- When asked about code, provide working examples.
+- Reference the current project context when relevant.
+- For research questions, cite real papers / datasets / tools.
+- Be encouraging and mentor-like in tone.`;
+
+    const apiMessages = [
+      { role: 'system', content: systemPrompt },
+      ...messages.map(m => ({ role: m.role, content: m.content })),
+    ];
+
+    const response = await fetch(OPENROUTER_BASE_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+        'HTTP-Referer': window.location.origin,
+        'X-Title': 'AcademiGen',
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        messages: apiMessages,
+        temperature: 0.7,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      throw new Error(`API error (${response.status}): ${errorBody}`);
+    }
+
+    const data = await response.json();
+    return data.choices[0].message.content;
   }
 };

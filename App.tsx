@@ -21,6 +21,7 @@ import GuidancePanel from './components/GuidancePanel';
 import DocumentationEditor from './components/DocumentationEditor';
 import CollaborationBoard from './components/CollaborationBoard';
 import VivaPrepPanel from './components/VivaPrepPanel';
+import AIChatbot from './components/AIChatbot';
 
 const App: React.FC = () => {
   const [activeView, setActiveView] = useState<AppView>('dashboard');
@@ -150,6 +151,8 @@ const App: React.FC = () => {
           )}
         </div>
       </main>
+      {/* AI Chatbot Floating Button + Full-page Overlay */}
+      <AIChatbot project={selectedProject} />
     </div>
   );
 };

@@ -10,6 +10,62 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; }
+
+        /* Perplexity orbit animation */
+        @keyframes orbit-1 {
+          0%   { transform: rotate(0deg)   translateX(28px) rotate(0deg)   scale(1); }
+          25%  { transform: rotate(90deg)  translateX(30px) rotate(-90deg)  scale(1.15); }
+          50%  { transform: rotate(180deg) translateX(28px) rotate(-180deg) scale(1); }
+          75%  { transform: rotate(270deg) translateX(30px) rotate(-270deg) scale(0.85); }
+          100% { transform: rotate(360deg) translateX(28px) rotate(-360deg) scale(1); }
+        }
+        @keyframes orbit-2 {
+          0%   { transform: rotate(120deg) translateX(28px) rotate(-120deg) scale(0.85); }
+          25%  { transform: rotate(210deg) translateX(30px) rotate(-210deg) scale(1); }
+          50%  { transform: rotate(300deg) translateX(28px) rotate(-300deg) scale(1.15); }
+          75%  { transform: rotate(390deg) translateX(30px) rotate(-390deg) scale(1); }
+          100% { transform: rotate(480deg) translateX(28px) rotate(-480deg) scale(0.85); }
+        }
+        @keyframes orbit-3 {
+          0%   { transform: rotate(240deg) translateX(28px) rotate(-240deg) scale(1.15); }
+          25%  { transform: rotate(330deg) translateX(30px) rotate(-330deg) scale(0.85); }
+          50%  { transform: rotate(420deg) translateX(28px) rotate(-420deg) scale(1); }
+          75%  { transform: rotate(510deg) translateX(30px) rotate(-510deg) scale(1.15); }
+          100% { transform: rotate(600deg) translateX(28px) rotate(-600deg) scale(1.15); }
+        }
+        @keyframes orbit-ring {
+          0%   { transform: rotate(0deg); opacity: 0.15; }
+          50%  { opacity: 0.25; }
+          100% { transform: rotate(360deg); opacity: 0.15; }
+        }
+        @keyframes orbit-glow {
+          0%, 100% { opacity: 0.3; transform: scale(1); }
+          50%      { opacity: 0.6; transform: scale(1.08); }
+        }
+        .orbit-dot-1 { animation: orbit-1 3s cubic-bezier(0.45, 0, 0.55, 1) infinite; }
+        .orbit-dot-2 { animation: orbit-2 3s cubic-bezier(0.45, 0, 0.55, 1) infinite; }
+        .orbit-dot-3 { animation: orbit-3 3s cubic-bezier(0.45, 0, 0.55, 1) infinite; }
+        .orbit-ring  { animation: orbit-ring 6s linear infinite; }
+        .orbit-glow  { animation: orbit-glow 3s ease-in-out infinite; }
+        
+        /* Image 2: Siri-like Blue Wave Animation */
+        @keyframes wave-spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        @keyframes wave-drift {
+          0% { transform: translate(0, 0); }
+          50% { transform: translate(4px, -4px); }
+          100% { transform: translate(0, 0); }
+        }
+        @keyframes wave-pulse-deep {
+            0% { transform: scale(0.95); opacity: 0.8; box-shadow: 0 0 20px rgba(6, 182, 212, 0.3); }
+            50% { transform: scale(1.05); opacity: 1; box-shadow: 0 0 40px rgba(59, 130, 246, 0.6); }
+            100% { transform: scale(0.95); opacity: 0.8; box-shadow: 0 0 20px rgba(6, 182, 212, 0.3); }
+        }
+        .animate-wave-spin-slow { animation: wave-spin 12s linear infinite; }
+        .animate-wave-spin-slower { animation: wave-spin 18s linear infinite reverse; }
+        .animate-wave-pulse-deep { animation: wave-pulse-deep 3s ease-in-out infinite; }
     </style>
 <script type="importmap">
 {
