@@ -25,15 +25,20 @@ import {
   SkillLevel, 
   CareerGoal, 
   Project,
-  Source
+  Source,
+  AppUser,
+  TaskPriority,
+  TaskComplexity
 } from '../types';
 import { geminiService } from '../services/geminiService';
 
 interface Props {
   onComplete: (project: Project) => void;
+  currentUser: AppUser;
+  teamMembers: AppUser[];
 }
 
-const IdeationWizard: React.FC<Props> = ({ onComplete }) => {
+const IdeationWizard: React.FC<Props> = ({ onComplete, currentUser, teamMembers }) => {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState<string>('');
@@ -84,47 +89,59 @@ const IdeationWizard: React.FC<Props> = ({ onComplete }) => {
         geminiService.generateGuidance(idea)
       ]);
       
-      // Generate initial tasks for the project
-      setLoadingStep('Generating project tasks...');
-      const taskBreakdowns = await geminiService.generateTaskBreakdown({
-        title: idea.title!,
-        problemStatement: idea.problemStatement!,
-        solutionIdea: idea.solutionIdea!,
-        techStack: guidance.techStack,
-      }, ['Aditya Verma']); // Default team member
+      // Generate initial tasks (non-fatal — project still created if this fails)
+      let generatedTasks: any[] = [];
+      try {
+        setLoadingStep('Generating project tasks...');
+        const memberNames = teamMembers.map(m => m.fullName).filter(Boolean);
+        const names = memberNames.length > 0 ? memberNames : [currentUser.fullName];
+        const taskBreakdowns = await geminiService.generateTaskBreakdown({
+          title: idea.title!,
+          problemStatement: idea.problemStatement!,
+          solutionIdea: idea.solutionIdea!,
+          techStack: guidance.techStack,
+        }, names);
 
-      // Convert task breakdowns to actual tasks
-      const generatedTasks = taskBreakdowns.flatMap(breakdown => {
-        const parentTaskId = Math.random().toString(36).substr(2, 9);
-        const parentTask = {
-          id: parentTaskId,
-          title: breakdown.parentTask,
-          description: `Parent task for ${breakdown.parentTask}`,
-          assignedTo: 'Aditya Verma',
-          status: 'todo' as const,
-          deadline: 'No Deadline',
-          priority: 'medium' as const,
-          priorityScore: 0,
-          complexity: 3 as const,
-          estimatedHours: breakdown.subtasks.reduce((sum, sub) => sum + sub.estimatedHours, 0),
-          dependencies: [],
-          subtasks: breakdown.subtasks.map(() => Math.random().toString(36).substr(2, 9)),
-          tags: ['auto-generated'],
-        };
+        generatedTasks = taskBreakdowns.flatMap(breakdown => {
+          const parentTaskId = Math.random().toString(36).substr(2, 9);
+          const childIds = (breakdown.subtasks || []).map(() => Math.random().toString(36).substr(2, 9));
+          const parentTask = {
+            id: parentTaskId,
+            title: breakdown.parentTask,
+            description: `Parent task for ${breakdown.parentTask}`,
+            assignedTo: currentUser.fullName,
+            status: 'todo' as const,
+            deadline: 'No Deadline',
+            priority: TaskPriority.Medium,
+            priorityScore: 0,
+            complexity: TaskComplexity.Moderate,
+            estimatedHours: (breakdown.subtasks || []).reduce((sum: number, sub: any) => sum + (sub.estimatedHours || 0), 0),
+            dependencies: [],
+            subtasks: childIds,
+            tags: ['auto-generated'],
+          };
 
-        const subtasks = breakdown.subtasks.map(sub => ({
-          ...sub,
-          id: Math.random().toString(36).substr(2, 9),
-          status: 'todo' as const,
-          priorityScore: 0,
-          dependencies: [],
-          subtasks: [],
-          tags: ['auto-generated'],
-          parentTaskId: parentTaskId,
-        }));
+          const subtasks = (breakdown.subtasks || []).map((sub: any, idx: number) => ({
+            ...sub,
+            id: childIds[idx],
+            status: sub.status || 'todo',
+            priority: sub.priority || TaskPriority.Medium,
+            complexity: sub.complexity || TaskComplexity.Moderate,
+            priorityScore: 0,
+            dependencies: sub.dependencies || [],
+            subtasks: [],
+            tags: sub.tags || ['auto-generated'],
+            parentTaskId: parentTaskId,
+            estimatedHours: sub.estimatedHours || 4,
+            assignedTo: sub.assignedTo || currentUser.fullName,
+            deadline: sub.deadline || 'No Deadline',
+          }));
 
-        return [parentTask, ...subtasks];
-      });
+          return [parentTask, ...subtasks];
+        });
+      } catch (taskErr) {
+        console.warn('Task generation failed (non-fatal):', taskErr);
+      }
 
       const fullProject: Project = {
         id: Math.random().toString(36).substr(2, 9),
@@ -132,15 +149,15 @@ const IdeationWizard: React.FC<Props> = ({ onComplete }) => {
         problemStatement: idea.problemStatement!,
         innovationAngle: idea.innovationAngle!,
         solutionIdea: idea.solutionIdea!,
-        abstract: docs.abstract,
-        prd: docs.prd,
-        designDoc: docs.designDoc,
-        techStack: guidance.techStack,
-        algorithms: guidance.algorithms,
+        abstract: docs.abstract || '',
+        prd: docs.prd || '',
+        designDoc: docs.designDoc || '',
+        techStack: guidance.techStack || [],
+        algorithms: guidance.algorithms || [],
         datasets: guidance.datasets || [],
-        roadmap: guidance.roadmap,
-        implementationStrategy: guidance.implementationStrategy,
-        learningResources: guidance.learningResources,
+        roadmap: guidance.roadmap || [],
+        implementationStrategy: guidance.implementationStrategy || '',
+        learningResources: guidance.learningResources || [],
         vivaQuestions: [],
         tasks: generatedTasks,
         sources: sources,
@@ -148,8 +165,9 @@ const IdeationWizard: React.FC<Props> = ({ onComplete }) => {
       };
       
       onComplete(fullProject);
-    } catch (error) {
-      alert("Error finalizing project. Try again.");
+    } catch (error: any) {
+      console.error('Error finalizing project:', error);
+      alert(`Error finalizing project: ${error?.message || 'Unknown error. Check console for details.'}`);
     } finally {
       setLoading(false);
       setLoadingStep('');

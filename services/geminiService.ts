@@ -5,7 +5,19 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const MODEL = 'google/gemini-2.0-flash-001';
 
-async function chatCompletion(systemPrompt: string, userPrompt: string): Promise<string> {
+async function chatCompletion(systemPrompt: string, userPrompt: string, json = true): Promise<string> {
+  const body: any = {
+    model: MODEL,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
+    temperature: 0.7,
+  };
+  if (json) {
+    body.response_format = { type: 'json_object' };
+  }
+
   const response = await fetch(OPENROUTER_BASE_URL, {
     method: 'POST',
     headers: {
@@ -14,15 +26,7 @@ async function chatCompletion(systemPrompt: string, userPrompt: string): Promise
       'HTTP-Referer': window.location.origin,
       'X-Title': 'AcademiGen',
     },
-    body: JSON.stringify({
-      model: MODEL,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.7,
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
@@ -42,9 +46,25 @@ function extractJSON(text: string): any {
     // Try extracting JSON from markdown code blocks
     const match = text.match(/```(?:json)?\s*([\s\S]*?)```/);
     if (match) {
-      return JSON.parse(match[1].trim());
+      try {
+        return JSON.parse(match[1].trim());
+      } catch { /* fall through */ }
     }
-    throw new Error('Failed to parse JSON from response');
+    // Try finding the first { ... } or [ ... ] blob
+    const braceMatch = text.match(/\{[\s\S]*\}/);
+    if (braceMatch) {
+      try {
+        return JSON.parse(braceMatch[0]);
+      } catch { /* fall through */ }
+    }
+    const bracketMatch = text.match(/\[[\s\S]*\]/);
+    if (bracketMatch) {
+      try {
+        return JSON.parse(bracketMatch[0]);
+      } catch { /* fall through */ }
+    }
+    console.error('Failed to parse JSON. Raw response:', text.slice(0, 500));
+    throw new Error('Failed to parse JSON from API response');
   }
 }
 
@@ -97,69 +117,193 @@ export const geminiService = {
   },
 
   async generateProjectDocumentation(project: Partial<Project>, profile: UserProfile): Promise<{ abstract: string; prd: string; designDoc: string }> {
-    const systemPrompt = `You are an expert academic writer, senior system analyst, and software architect. You produce strictly formatted academic documents. You always respond with valid JSON only.`;
+    // Split into 3 separate plain-text calls for reliability
+    const abstractPrompt = `You are an academic research assistant.
+Generate an ACADEMIC ABSTRACT in a STRICTLY STRUCTURED FORMAT.
 
-    const userPrompt = `
-      Perform these three documentation tasks for the project and return results as a JSON object with keys "abstract", "prd", and "designDoc".
+PROJECT DETAILS:
+- Title: ${project.title}
+- Domain: ${profile.department}
+- Problem Statement: ${project.problemStatement}
+- Techniques: ${project.innovationAngle}
+- Expected Outcome: ${project.solutionIdea}
 
-      --- TASK 1: ACADEMIC ABSTRACT ---
-      Generate an ACADEMIC ABSTRACT in a STRICTLY STRUCTURED FORMAT.
-      Project Title: ${project.title}
-      Domain: ${profile.department}
-      Problem Statement: ${project.problemStatement}
-      Techniques: ${project.innovationAngle}
-      Expected Outcome: ${project.solutionIdea}
-      
-      FORMAT RULES (MANDATORY):
-      - Use EXACTLY the following section labels
-      - Each section must be 2–3 sentences
-      - DO NOT merge sections
-      - DO NOT write a single long paragraph
-      - DO NOT add extra headings
-      
-      OUTPUT FORMAT (STRICT):
-      BACKGROUND: <text>
-      PROBLEM STATEMENT: <text>
-      PROPOSED SOLUTION: <text>
-      METHODOLOGY: <text>
-      EXPECTED RESULTS: <text>
+FORMAT RULES (MANDATORY):
+- Use EXACTLY the following section labels in UPPERCASE followed by a colon
+- Each section must be 2-3 sentences
+- DO NOT merge sections into one paragraph
+- DO NOT add extra headings
+- Separate each section with a blank line
 
-      --- TASK 2: PRD ---
-      Generate a PRODUCT REQUIREMENTS DOCUMENT (PRD) in a STRICT, NUMBERED, OFFICIAL FORMAT.
-      Project Title: ${project.title}
-      Target Users: Students, researchers, and relevant industry professionals.
-      Constraints: 6 Months timeline, limited compute resources.
-      
-      DOCUMENT STRUCTURE (DO NOT CHANGE):
-      1. Introduction (1.1 Purpose, 1.2 Intended Audience, 1.3 Project Overview)
-      2. Problem Definition (2.1 Existing System, 2.2 Limitations of Existing System, 2.3 Proposed System)
-      3. Functional Requirements (FR1:, FR2:, FR3:, FR4:)
-      4. Non-Functional Requirements (4.1 Performance, 4.2 Scalability, 4.3 Security, 4.4 Usability)
-      5. Assumptions & Dependencies
-      6. Constraints
-      7. Success Criteria
+OUTPUT FORMAT (follow this EXACTLY, return ONLY the formatted text below, no JSON, no code fences):
 
-      --- TASK 3: SYSTEM DESIGN DOCUMENT ---
-      Generate a SYSTEM DESIGN DOCUMENT (SDD) in a STRICTLY STRUCTURED FORMAT.
-      Project Title: ${project.title}
-      Tech Stack: ${profile.techPreferences.join(', ')}
-      AI/ML Models: ${project.innovationAngle}
-      
-      DOCUMENT STRUCTURE (STRICT):
-      1. System Overview
-      2. System Architecture (2.1 High-Level Architecture, 2.2 Component Description)
-      3. Module Design (3.1 User Interface Module, 3.2 Backend Processing Module, 3.3 AI/ML Processing Module, 3.4 Database Module)
-      4. Data Flow Description (Step 1 → Step 2 → Step 3 → ...)
-      5. Workflow Description
-      6. Technology Stack Justification
-      7. Security Considerations
-      8. Scalability & Future Enhancements
+BACKGROUND:
+<2-3 sentences about domain context>
 
-      Return JSON: { "abstract": "<full abstract text>", "prd": "<full PRD text>", "designDoc": "<full SDD text>" }
-    `;
+PROBLEM STATEMENT:
+<2-3 sentences defining the core problem>
 
-    const responseText = await chatCompletion(systemPrompt, userPrompt);
-    return extractJSON(responseText);
+PROPOSED SOLUTION:
+<2-3 sentences describing the proposed approach>
+
+METHODOLOGY:
+<2-3 sentences on techniques, algorithms, and tools used>
+
+EXPECTED RESULTS:
+<2-3 sentences on anticipated outcomes and impact>`;
+
+    const prdPrompt = `You are a senior system analyst.
+Generate a PRODUCT REQUIREMENTS DOCUMENT (PRD) in a STRICT, NUMBERED, OFFICIAL FORMAT.
+
+PROJECT:
+- Title: ${project.title}
+- Problem: ${project.problemStatement}
+- Solution: ${project.solutionIdea}
+- Target Users: Students, researchers, and relevant industry professionals
+- Constraints: 6 Months timeline, limited compute resources
+
+FORMAT RULES (MANDATORY):
+- Use numbered headings EXACTLY as given below
+- Use bullet points (- ) for all requirements and list items
+- DO NOT write continuous paragraphs
+- Each requirement MUST be on its own line
+- Separate major sections with blank lines
+- Return ONLY the formatted document text, no JSON, no code fences
+
+DOCUMENT STRUCTURE (follow this EXACTLY):
+
+1. Introduction
+
+1.1 Purpose
+- <bullet point>
+
+1.2 Intended Audience
+- <bullet point>
+
+1.3 Project Overview
+- <bullet point>
+
+2. Problem Definition
+
+2.1 Existing System
+- <bullet point>
+
+2.2 Limitations of Existing System
+- <bullet point list>
+
+2.3 Proposed System
+- <bullet point>
+
+3. Functional Requirements
+- FR1: <requirement>
+- FR2: <requirement>
+- FR3: <requirement>
+- FR4: <requirement>
+
+4. Non-Functional Requirements
+
+4.1 Performance
+- <bullet point>
+
+4.2 Scalability
+- <bullet point>
+
+4.3 Security
+- <bullet point>
+
+4.4 Usability
+- <bullet point>
+
+5. Assumptions & Dependencies
+- <bullet points>
+
+6. Constraints
+- <bullet points>
+
+7. Success Criteria
+- <bullet points>`;
+
+    const sddPrompt = `You are a software architect.
+Generate a SYSTEM DESIGN DOCUMENT (SDD) in a STRICTLY STRUCTURED FORMAT.
+
+INPUT:
+- Project Title: ${project.title}
+- Problem: ${project.problemStatement}
+- Solution: ${project.solutionIdea}
+- Tech Stack: ${profile.techPreferences.join(', ') || 'React, Node.js, Python, MongoDB'}
+- AI/ML Models: ${project.innovationAngle}
+
+FORMAT RULES (MANDATORY):
+- Use numbered headings EXACTLY as given
+- Use bullet points (- ) for module descriptions
+- Use arrow notation (→) for data flow steps
+- DO NOT write paragraph-only explanations
+- Separate sections with blank lines
+- Return ONLY the formatted document text, no JSON, no code fences
+
+DOCUMENT STRUCTURE (follow this EXACTLY):
+
+1. System Overview
+- <bullet point description>
+
+2. System Architecture
+
+2.1 High-Level Architecture
+- <bullet point describing architecture layers>
+
+2.2 Component Description
+- <bullet point per component>
+
+3. Module Design
+
+3.1 User Interface Module
+- <bullet points>
+
+3.2 Backend Processing Module
+- <bullet points>
+
+3.3 AI/ML Processing Module
+- <bullet points>
+
+3.4 Database Module
+- <bullet points>
+
+4. Data Flow Description
+- Step 1 → <description>
+- Step 2 → <description>
+- Step 3 → <description>
+- Step 4 → <description>
+
+5. Workflow Description
+- <bullet points describing the end-to-end workflow>
+
+6. Technology Stack Justification
+- <bullet point per technology choice with justification>
+
+7. Security Considerations
+- <bullet points>
+
+8. Scalability & Future Enhancements
+- <bullet points>`;
+
+    const sysAbstract = 'You are an expert academic writer. Return ONLY the formatted document text. No JSON. No markdown code fences.';
+    const sysPrd = 'You are a senior system analyst. Return ONLY the formatted document text. No JSON. No markdown code fences.';
+    const sysSdd = 'You are a software architect. Return ONLY the formatted document text. No JSON. No markdown code fences.';
+
+    const [abstract, prd, designDoc] = await Promise.all([
+      chatCompletion(sysAbstract, abstractPrompt, false),
+      chatCompletion(sysPrd, prdPrompt, false),
+      chatCompletion(sysSdd, sddPrompt, false),
+    ]);
+
+    // Strip any accidental code fences the model might still add
+    const clean = (text: string) => text.replace(/^```[\w]*\n?/gm, '').replace(/```$/gm, '').trim();
+
+    return {
+      abstract: clean(abstract),
+      prd: clean(prd),
+      designDoc: clean(designDoc),
+    };
   },
 
   async generateGuidance(project: Partial<Project>): Promise<{ 

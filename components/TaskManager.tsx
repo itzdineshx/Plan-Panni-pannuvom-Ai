@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   DndContext,
   closestCenter,
@@ -35,15 +35,23 @@ import {
   BarChart3,
   TrendingUp,
   Target,
-  Zap
+  Zap,
+  Paperclip,
+  Upload,
+  Download,
+  CheckSquare
 } from 'lucide-react';
-import { Project, Task, TaskPriority, TaskComplexity } from '../types';
+import { AppUser, FileAttachment, Project, Task, TaskPriority, TaskComplexity } from '../types';
 import { rankTasks, computePriorityScore } from '../services/taskBreakdownService';
 import { checkTaskAlerts, checkDeadlineReminders } from '../services/notificationService';
+import { uploadFile, getAttachmentIcon, formatBytes } from '../services/fileUploadService';
+import { exportTasksToCsv, exportTasksToXlsx } from '../services/exportService';
 
 interface Props {
   project: Project;
   onUpdateProject: (project: Project) => void;
+  teamMembers: string[];
+  currentUser: AppUser;
 }
 
 interface SortableTaskItemProps {
@@ -54,6 +62,7 @@ interface SortableTaskItemProps {
   onToggleSubtasks: (taskId: string) => void;
   expandedTasks: Set<string>;
   level: number;
+  uploadedBy: string;
 }
 
 const SortableTaskItem: React.FC<SortableTaskItemProps> = ({
@@ -63,7 +72,8 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({
   onDelete,
   onToggleSubtasks,
   expandedTasks,
-  level
+  level,
+  uploadedBy
 }) => {
   const {
     attributes,
@@ -107,6 +117,32 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({
 
   const isOverdue = daysUntilDeadline !== null && daysUntilDeadline < 0;
   const isDueSoon = daysUntilDeadline !== null && daysUntilDeadline <= 3 && daysUntilDeadline >= 0;
+  const [uploading, setUploading] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleAttachmentUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    try {
+      const next: FileAttachment[] = [...(task.attachments || [])];
+      for (let i = 0; i < files.length; i++) {
+        const attachment = await uploadFile(files[i], uploadedBy);
+        next.push(attachment);
+      }
+      onUpdate({ ...task, attachments: next });
+    } catch (err: any) {
+      alert(err.message || 'Upload failed');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleRemoveAttachment = (attachmentId: string) => {
+    onUpdate({
+      ...task,
+      attachments: (task.attachments || []).filter(att => att.id !== attachmentId),
+    });
+  };
 
   return (
     <div
@@ -190,6 +226,58 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({
               </div>
             )}
           </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {task.attachments && task.attachments.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {task.attachments.map(att => (
+                  <div
+                    key={att.id}
+                    className="flex items-center gap-2 border border-slate-200 rounded-lg px-2 py-1 text-xs"
+                  >
+                    <span className={`text-[10px] px-2 py-0.5 rounded ${getAttachmentIcon(att.type).color}`}>
+                      {getAttachmentIcon(att.type).emoji}
+                    </span>
+                    <a
+                      href={att.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-slate-700 hover:text-indigo-600"
+                    >
+                      {att.name}
+                    </a>
+                    <span className="text-[10px] text-slate-400">{formatBytes(att.size)}</span>
+                    <button
+                      onClick={() => handleRemoveAttachment(att.id)}
+                      className="text-slate-400 hover:text-rose-500"
+                      title="Remove"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div>
+              <input
+                ref={inputRef}
+                type="file"
+                multiple
+                accept="image/*,.pdf,.doc,.docx,.txt,.xlsx,.pptx"
+                className="hidden"
+                aria-label="Attach files to task"
+                onChange={e => handleAttachmentUpload(e.target.files)}
+              />
+              <button
+                onClick={() => inputRef.current?.click()}
+                disabled={uploading}
+                className="inline-flex items-center gap-1 px-2 py-1 text-xs text-slate-500 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-60"
+              >
+                {uploading ? <Upload size={12} className="animate-pulse" /> : <Paperclip size={12} />}
+                Attach
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -205,6 +293,7 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({
               onToggleSubtasks={onToggleSubtasks}
               expandedTasks={expandedTasks}
               level={level + 1}
+              uploadedBy={uploadedBy}
             />
           ))}
         </div>
@@ -213,7 +302,7 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({
   );
 };
 
-const TaskManager: React.FC<Props> = ({ project, onUpdateProject }) => {
+const TaskManager: React.FC<Props> = ({ project, onUpdateProject, teamMembers, currentUser }) => {
   const [tasks, setTasks] = useState<Task[]>(project.tasks || []);
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState<'all' | 'todo' | 'in-progress' | 'done'>('all');
@@ -352,6 +441,14 @@ const TaskManager: React.FC<Props> = ({ project, onUpdateProject }) => {
     return { total, completed, inProgress, overdue, progress: total > 0 ? (completed / total) * 100 : 0 };
   }, [tasks]);
 
+  const handleExportCsv = () => {
+    exportTasksToCsv({ ...project, tasks });
+  };
+
+  const handleExportXlsx = () => {
+    exportTasksToXlsx({ ...project, tasks });
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -360,13 +457,27 @@ const TaskManager: React.FC<Props> = ({ project, onUpdateProject }) => {
           <h2 className="text-2xl font-bold text-slate-800">Task Manager</h2>
           <p className="text-slate-600">Manage and track your project tasks</p>
         </div>
-        <button
-          onClick={() => setShowAddForm(true)}
-          className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-        >
-          <Plus size={18} />
-          Add Task
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleExportCsv}
+            className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 px-3 py-2 rounded-lg text-sm font-medium hover:border-indigo-200"
+          >
+            <Download size={16} /> Export CSV
+          </button>
+          <button
+            onClick={handleExportXlsx}
+            className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 px-3 py-2 rounded-lg text-sm font-medium hover:border-indigo-200"
+          >
+            <Download size={16} /> Export Excel
+          </button>
+          <button
+            onClick={() => setShowAddForm(true)}
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+          >
+            <Plus size={18} />
+            Add Task
+          </button>
+        </div>
       </div>
 
       {/* Progress Overview */}
@@ -462,6 +573,7 @@ const TaskManager: React.FC<Props> = ({ project, onUpdateProject }) => {
                 onToggleSubtasks={toggleSubtasks}
                 expandedTasks={expandedTasks}
                 level={0}
+                uploadedBy={currentUser.fullName}
               />
             ))}
           </div>
@@ -498,24 +610,32 @@ const TaskManager: React.FC<Props> = ({ project, onUpdateProject }) => {
               });
             }}>
               <div className="space-y-4">
-                <input name="title" placeholder="Task title" required className="w-full p-2 border rounded" />
-                <textarea name="description" placeholder="Description" className="w-full p-2 border rounded" />
-                <input name="assignee" placeholder="Assigned to" required className="w-full p-2 border rounded" />
-                <input name="deadline" type="date" className="w-full p-2 border rounded" />
-                <select name="priority" required className="w-full p-2 border rounded">
+                <input name="title" placeholder="Task title" aria-label="Task title" required className="w-full p-2 border rounded" />
+                <textarea name="description" placeholder="Description" aria-label="Task description" className="w-full p-2 border rounded" />
+                {teamMembers.length > 0 ? (
+                  <select name="assignee" aria-label="Assignee" required className="w-full p-2 border rounded" defaultValue={currentUser.fullName}>
+                    {teamMembers.map(member => (
+                      <option key={member} value={member}>{member}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input name="assignee" placeholder="Assigned to" aria-label="Assignee" required className="w-full p-2 border rounded" />
+                )}
+                <input name="deadline" type="date" aria-label="Deadline" className="w-full p-2 border rounded" />
+                <select name="priority" aria-label="Priority" required className="w-full p-2 border rounded">
                   <option value="low">Low</option>
                   <option value="medium">Medium</option>
                   <option value="high">High</option>
                   <option value="critical">Critical</option>
                 </select>
-                <select name="complexity" required className="w-full p-2 border rounded">
+                <select name="complexity" aria-label="Complexity" required className="w-full p-2 border rounded">
                   <option value="1">Trivial</option>
                   <option value="2">Simple</option>
                   <option value="3">Moderate</option>
                   <option value="5">Complex</option>
                   <option value="8">Epic</option>
                 </select>
-                <input name="hours" type="number" placeholder="Estimated hours" required className="w-full p-2 border rounded" />
+                <input name="hours" type="number" placeholder="Estimated hours" aria-label="Estimated hours" required className="w-full p-2 border rounded" />
               </div>
               <div className="flex gap-2 mt-6">
                 <button type="submit" className="flex-1 bg-indigo-600 text-white py-2 rounded">Add Task</button>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Project, Task, Milestone, TaskPriority, TaskComplexity, FileAttachment, AppNotification } from '../types';
+import { AppUser, Project, Task, Milestone, TaskPriority, TaskComplexity, FileAttachment, AppNotification } from '../types';
 import {
   Users, Plus, Trash2, ChevronDown, ChevronRight, Clock, AlertTriangle,
   Calendar, BarChart3, Target, Zap, ArrowRight, CheckCircle2, Circle,
@@ -23,6 +23,9 @@ import {
 
 interface Props {
   project: Project;
+  onUpdateProject: (project: Project) => void;
+  teamMembers: string[];
+  currentUser: AppUser;
 }
 
 type BoardTab = 'board' | 'milestones' | 'analytics';
@@ -237,7 +240,8 @@ const FilePreviewModal: React.FC<{
 const FileUploadZone: React.FC<{
   onUpload: (attachment: FileAttachment) => void;
   compact?: boolean;
-}> = ({ onUpload, compact }) => {
+  uploadedBy?: string;
+}> = ({ onUpload, compact, uploadedBy }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -247,7 +251,7 @@ const FileUploadZone: React.FC<{
     setUploading(true);
     try {
       for (let i = 0; i < files.length; i++) {
-        const att = await uploadFile(files[i]);
+        const att = await uploadFile(files[i], uploadedBy || 'Current User');
         onUpload(att);
       }
     } catch (err: any) {
@@ -272,6 +276,7 @@ const FileUploadZone: React.FC<{
           multiple
           accept="image/*,.pdf,.doc,.docx,.txt,.xlsx,.pptx"
           className="hidden"
+          aria-label="Upload attachments"
           onChange={e => handleFiles(e.target.files)}
         />
         <button
@@ -302,6 +307,7 @@ const FileUploadZone: React.FC<{
         multiple
         accept="image/*,.pdf,.doc,.docx,.txt,.xlsx,.pptx"
         className="hidden"
+        aria-label="Upload attachments"
         onChange={e => handleFiles(e.target.files)}
       />
       {uploading ? (
@@ -534,7 +540,6 @@ const MilestonesTab: React.FC<{
 // ── Main CollaborationBoard Component ───────────────────────────────────
 // ════════════════════════════════════════════════════════════════════════════
 
-const TEAM_MEMBERS = ['Aditya', 'Priya', 'Rahul', 'Sneha'];
 const COLUMNS: { key: Task['status']; label: string; color: string; icon: React.ReactNode }[] = [
   { key: 'todo', label: 'To Do', color: 'border-slate-300 bg-slate-50', icon: <Circle size={14} className="text-slate-400" /> },
   { key: 'in-progress', label: 'In Progress', color: 'border-blue-300 bg-blue-50', icon: <Timer size={14} className="text-blue-500" /> },
@@ -542,7 +547,7 @@ const COLUMNS: { key: Task['status']; label: string; color: string; icon: React.
   { key: 'blocked', label: 'Blocked', color: 'border-red-300 bg-red-50', icon: <Shield size={14} className="text-red-500" /> },
 ];
 
-const CollaborationBoard: React.FC<Props> = ({ project }) => {
+const CollaborationBoard: React.FC<Props> = ({ project, onUpdateProject, teamMembers, currentUser }) => {
   const [tasks, setTasks] = useState<Task[]>(project.tasks || []);
   const [milestones, setMilestones] = useState<Milestone[]>(project.roadmap || []);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -550,6 +555,30 @@ const CollaborationBoard: React.FC<Props> = ({ project }) => {
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
   const [previewAttachment, setPreviewAttachment] = useState<FileAttachment | null>(null);
   const dragItem = useRef<string | null>(null);
+  const initializedRef = useRef(false);
+
+  const teamList = useMemo(() => {
+    if (teamMembers.length > 0) return teamMembers;
+    return [currentUser.fullName || 'Team Member'];
+  }, [teamMembers, currentUser.fullName]);
+
+  useEffect(() => {
+    setTasks(project.tasks || []);
+    setMilestones(project.roadmap || []);
+    initializedRef.current = false;
+  }, [project.id]);
+
+  useEffect(() => {
+    if (!initializedRef.current) {
+      initializedRef.current = true;
+      return;
+    }
+    onUpdateProject({
+      ...project,
+      tasks,
+      roadmap: milestones,
+    });
+  }, [tasks, milestones]);
 
   // ── Request notification permission on mount ──
   useEffect(() => {
@@ -602,7 +631,7 @@ const CollaborationBoard: React.FC<Props> = ({ project }) => {
   const generateTasks = async () => {
     setIsGenerating(true);
     try {
-      const breakdowns = await geminiService.generateTaskBreakdown(project, TEAM_MEMBERS);
+      const breakdowns = await geminiService.generateTaskBreakdown(project, teamList);
       const allTasks: Task[] = [];
       const generatedMilestones: Milestone[] = [];
 
@@ -627,7 +656,7 @@ const CollaborationBoard: React.FC<Props> = ({ project }) => {
           id: parentId,
           title: phase.parentTask,
           status: 'todo',
-          assignedTo: TEAM_MEMBERS[phaseIdx % TEAM_MEMBERS.length],
+          assignedTo: teamList[phaseIdx % teamList.length],
           priority: TaskPriority.High,
           complexity: TaskComplexity.Epic,
           estimatedHours: 0,
@@ -667,7 +696,7 @@ const CollaborationBoard: React.FC<Props> = ({ project }) => {
 
       // Rank & optionally schedule
       const ranked = rankTasks(allTasks);
-      const schedule = optimizeSchedule(ranked, TEAM_MEMBERS);
+      const schedule = optimizeSchedule(ranked, teamList);
       const scheduled = applySchedule(ranked, schedule);
 
       // Update milestone target dates from scheduled tasks
@@ -834,7 +863,7 @@ const CollaborationBoard: React.FC<Props> = ({ project }) => {
           <div className="bg-white rounded-xl border border-slate-200 p-5">
             <h4 className="font-bold text-slate-800 mb-4">Team Workload</h4>
             <div className="space-y-3">
-              {TEAM_MEMBERS.map(member => {
+              {teamList.map(member => {
                 const memberTasks = tasks.filter(t => t.assignedTo === member && !t.subtasks?.length);
                 const done = memberTasks.filter(t => t.status === 'done').length;
                 const pct = memberTasks.length > 0 ? Math.round((done / memberTasks.length) * 100) : 0;
@@ -1012,7 +1041,10 @@ const CollaborationBoard: React.FC<Props> = ({ project }) => {
                                   <p className="text-[11px] font-semibold text-slate-600 mb-1.5 flex items-center gap-1">
                                     <Paperclip size={11} /> Attachments
                                   </p>
-                                  <FileUploadZone onUpload={(att) => handleTaskAttachment(task.id, att)} />
+                                  <FileUploadZone
+                                    onUpload={(att) => handleTaskAttachment(task.id, att)}
+                                    uploadedBy={currentUser.fullName}
+                                  />
                                 </div>
 
                                 {/* Subtasks */}

@@ -1,8 +1,9 @@
 
 import React from 'react';
 import { Project } from '../types';
-import { Plus, Clock, CheckCircle2, Layout, BookOpen, Users, Target, TrendingUp, AlertTriangle } from 'lucide-react';
+import { Plus, Clock, CheckCircle2, Layout, BookOpen, Users, Target, TrendingUp, AlertTriangle, Share2, Download } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { downloadProjectSummaryReport, shareProjectSummary } from '../services/exportService';
 
 interface Props {
   projects: Project[];
@@ -64,6 +65,28 @@ const ProjectDashboard: React.FC<Props> = ({ projects, selectedProjectId, onSele
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      {selectedProject && (
+        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h3 className="text-lg font-bold text-slate-800">Project Summary</h3>
+            <p className="text-sm text-slate-500">Share a quick status update with your team.</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => shareProjectSummary(selectedProject)}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 text-slate-600 text-sm font-semibold hover:border-indigo-200"
+            >
+              <Share2 size={16} /> Share Summary
+            </button>
+            <button
+              onClick={() => downloadProjectSummaryReport(selectedProject)}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700"
+            >
+              <Download size={16} /> Download Report
+            </button>
+          </div>
+        </div>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between mb-4">

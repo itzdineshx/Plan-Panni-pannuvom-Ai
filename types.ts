@@ -61,6 +61,7 @@ export interface Project {
   abstract: string;
   prd: string;
   designDoc: string;
+  documentationAttachments?: FileAttachment[];
   techStack: TechComponent[];
   algorithms: { name: string; description: string; implementationLogic: string }[];
   datasets: Dataset[];
@@ -96,6 +97,17 @@ export interface FileAttachment {
   uploadedBy: string;
   uploadedAt: string;
   thumbnailUrl?: string;
+}
+
+export interface AppUser {
+  id: string;
+  fullName: string;
+  email: string;
+  password: string;
+  academicLevel?: AcademicLevel;
+  department?: string;
+  headline?: string;
+  avatarUrl?: string;
 }
 
 export interface AppNotification {
