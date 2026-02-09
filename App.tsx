@@ -22,6 +22,7 @@ import DocumentationEditor from './components/DocumentationEditor';
 import CollaborationBoard from './components/CollaborationBoard';
 import VivaPrepPanel from './components/VivaPrepPanel';
 import AIChatbot from './components/AIChatbot';
+import { requestNotificationPermission } from './services/notificationService';
 
 const App: React.FC = () => {
   const [activeView, setActiveView] = useState<AppView>('dashboard');
