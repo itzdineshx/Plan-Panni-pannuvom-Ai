@@ -79,6 +79,35 @@ export interface Milestone {
   title: string;
   duration: string;
   description: string;
+  startDate?: string;
+  targetDate?: string;
+  aiSuggestedDate?: string;
+  completionPercentage?: number;
+  status?: 'not-started' | 'in-progress' | 'completed' | 'overdue';
+  linkedTaskIds?: string[];
+}
+
+export interface FileAttachment {
+  id: string;
+  name: string;
+  url: string;
+  type: 'image' | 'pdf' | 'document' | 'other';
+  size: number;
+  uploadedBy: string;
+  uploadedAt: string;
+  thumbnailUrl?: string;
+}
+
+export interface AppNotification {
+  id: string;
+  type: 'overdue' | 'critical-path' | 'chatbot' | 'milestone' | 'mention' | 'info';
+  title: string;
+  message: string;
+  timestamp: string;
+  read: boolean;
+  actionUrl?: string;
+  relatedTaskId?: string;
+  relatedMilestoneId?: string;
 }
 
 export interface VivaQuestion {
@@ -122,6 +151,12 @@ export interface Task {
   scheduledEnd?: string;
   criticalPath?: boolean;
   milestoneId?: string;
+  attachments?: FileAttachment[];
+}
+
+export interface ChatMessageAttachment {
+  id: string;
+  file: FileAttachment;
 }
 
 export interface ScheduleSlot {

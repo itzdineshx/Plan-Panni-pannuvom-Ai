@@ -1,857 +1,1063 @@
-import React, { useState, useMemo, useCallback } from 'react';
-import { Project, Task, TaskPriority, TaskComplexity, ScheduleResult } from '../types';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { Project, Task, Milestone, TaskPriority, TaskComplexity, FileAttachment, AppNotification } from '../types';
 import {
-  Users,
-  Plus,
-  Search,
-  Calendar,
-  Circle,
-  Clock,
-  CheckCircle2,
-  Trash2,
-  ArrowUpDown,
-  User,
-  Tag,
-  Zap,
-  AlertTriangle,
-  BarChart3,
-  GitBranch,
-  Brain,
-  Loader2,
-  ChevronDown,
-  ChevronRight,
-  Target,
-  TrendingUp,
-  ArrowRight,
-  RefreshCw,
-  Sparkles,
-  Lock,
-  Shield
+  Users, Plus, Trash2, ChevronDown, ChevronRight, Clock, AlertTriangle,
+  Calendar, BarChart3, Target, Zap, ArrowRight, CheckCircle2, Circle,
+  Timer, Flame, Shield, Loader2, RefreshCw, Flag, TrendingUp,
+  Paperclip, Upload, Image, FileText, X, Download, Eye,
+  Bell, BellRing, Check, ExternalLink, Milestone as MilestoneIcon,
 } from 'lucide-react';
-import {
-  rankTasks,
-  optimizeSchedule,
-  applySchedule,
-  createTask,
-  getReadyTasks,
-  detectBlockedTasks,
-  getPriorityColor,
-  getScoreColor,
-} from '../services/taskBreakdownService';
 import { geminiService } from '../services/geminiService';
+import {
+  rankTasks, optimizeSchedule, createTask, applySchedule,
+  getReadyTasks, detectBlockedTasks, getPriorityColor, getScoreColor,
+} from '../services/taskBreakdownService';
+import {
+  requestNotificationPermission, subscribeNotifications, checkTaskAlerts,
+  checkMilestoneAlerts, markAsRead, markAllAsRead, dismissNotification,
+  clearAllNotifications, addNotification,
+} from '../services/notificationService';
+import {
+  uploadFile, getAttachmentIcon, formatBytes,
+} from '../services/fileUploadService';
 
 interface Props {
   project: Project;
 }
 
-const TEAM_MEMBERS = ['Aditya', 'Rahul', 'Sneha'];
+type BoardTab = 'board' | 'milestones' | 'analytics';
 
-const PRIORITY_OPTIONS: { value: TaskPriority; label: string }[] = [
-  { value: TaskPriority.Critical, label: 'Critical' },
-  { value: TaskPriority.High, label: 'High' },
-  { value: TaskPriority.Medium, label: 'Medium' },
-  { value: TaskPriority.Low, label: 'Low' },
-];
+// ════════════════════════════════════════════════════════════════════════════
+// ── Notification Toast Component ─────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
 
-const COMPLEXITY_OPTIONS: { value: TaskComplexity; label: string }[] = [
-  { value: TaskComplexity.Trivial, label: '1 - Trivial' },
-  { value: TaskComplexity.Simple, label: '2 - Simple' },
-  { value: TaskComplexity.Moderate, label: '3 - Moderate' },
-  { value: TaskComplexity.Complex, label: '5 - Complex' },
-  { value: TaskComplexity.Epic, label: '8 - Epic' },
-];
-
-// ── Helper sub-components ────────────────────────────────────────────────────
-
-const PriorityBadge: React.FC<{ priority: TaskPriority }> = ({ priority }) => (
-  <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${getPriorityColor(priority)}`}>
-    {priority}
-  </span>
-);
-
-const ScoreBar: React.FC<{ score: number }> = ({ score }) => (
-  <div className="flex items-center gap-2 min-w-[100px]">
-    <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-      <div className={`h-full rounded-full transition-all ${getScoreColor(score)}`} style={{ width: `${score}%` }} />
-    </div>
-    <span className="text-[10px] font-mono font-bold text-slate-500 w-6 text-right">{score}</span>
-  </div>
-);
-
-const StatusIcon: React.FC<{ status: Task['status'] }> = ({ status }) => {
-  switch (status) {
-    case 'done': return <CheckCircle2 size={22} className="text-emerald-500" />;
-    case 'in-progress': return <Clock size={22} className="text-indigo-500 animate-pulse" />;
-    case 'blocked': return <Lock size={22} className="text-rose-400" />;
-    default: return <Circle size={22} className="text-slate-300" />;
-  }
-};
-
-// ── Main component ───────────────────────────────────────────────────────────
-
-const CollaborationBoard: React.FC<Props> = ({ project }) => {
-  const [tasks, setTasks] = useState<Task[]>(() => {
-    const defaults: Task[] = [
-      createTask({ title: 'Setup GitHub Repo', assignedTo: 'Aditya', status: 'done', deadline: '2026-03-10', priority: TaskPriority.High, complexity: TaskComplexity.Simple, estimatedHours: 2, tags: ['setup'] }),
-      createTask({ title: 'Data Cleaning Script', assignedTo: 'Rahul', status: 'in-progress', deadline: '2026-03-15', priority: TaskPriority.Medium, complexity: TaskComplexity.Moderate, estimatedHours: 8, tags: ['data'] }),
-      createTask({ title: 'Draft Literature Survey', assignedTo: 'Sneha', status: 'todo', deadline: '2026-03-20', priority: TaskPriority.High, complexity: TaskComplexity.Complex, estimatedHours: 16, tags: ['research'] }),
-      createTask({ title: 'System Architecture Diagram', assignedTo: 'Aditya', status: 'todo', deadline: '2026-03-12', priority: TaskPriority.Critical, complexity: TaskComplexity.Moderate, estimatedHours: 6, tags: ['architecture'] }),
-    ];
-    return rankTasks(defaults);
-  });
-
-  const [schedule, setSchedule] = useState<ScheduleResult | null>(null);
-  const [activeTab, setActiveTab] = useState<'tasks' | 'schedule' | 'insights'>('tasks');
-  const [isGenerating, setIsGenerating] = useState(false);
-
-  // New task form state
-  const [newTaskTitle, setNewTaskTitle] = useState('');
-  const [newTaskAssignee, setNewTaskAssignee] = useState('');
-  const [newTaskDeadline, setNewTaskDeadline] = useState('');
-  const [newTaskPriority, setNewTaskPriority] = useState<TaskPriority>(TaskPriority.Medium);
-  const [newTaskComplexity, setNewTaskComplexity] = useState<TaskComplexity>(TaskComplexity.Moderate);
-  const [newTaskHours, setNewTaskHours] = useState('4');
-  const [newTaskDeps, setNewTaskDeps] = useState<string[]>([]);
-
-  // Filters & sort
-  const [statusFilter, setStatusFilter] = useState<'all' | Task['status']>('all');
-  const [sortBy, setSortBy] = useState<'priorityScore' | 'deadline' | 'assignee' | 'status'>('priorityScore');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
-
-  // ── Derived data ──────────────────────────────────────────────────────────
-  const readyTasks = useMemo(() => getReadyTasks(tasks), [tasks]);
-  const blockedTasks = useMemo(() => detectBlockedTasks(tasks), [tasks]);
-
-  const filteredAndSortedTasks = useMemo(() => {
-    return tasks
-      .filter(t => {
-        const matchesStatus = statusFilter === 'all' || t.status === statusFilter;
-        const matchesSearch =
-          t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          t.assignedTo.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          t.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
-        return matchesStatus && matchesSearch;
-      })
-      .sort((a, b) => {
-        switch (sortBy) {
-          case 'priorityScore': return b.priorityScore - a.priorityScore;
-          case 'deadline': return a.deadline.localeCompare(b.deadline);
-          case 'assignee': return a.assignedTo.localeCompare(b.assignedTo);
-          case 'status': {
-            const order: Record<string, number> = { 'blocked': 0, 'in-progress': 1, 'todo': 2, 'done': 3 };
-            return (order[a.status] ?? 2) - (order[b.status] ?? 2);
-          }
-          default: return 0;
-        }
-      });
-  }, [tasks, statusFilter, sortBy, searchQuery]);
-
-  const stats = useMemo(() => {
-    const total = tasks.length;
-    const done = tasks.filter(t => t.status === 'done').length;
-    const critical = tasks.filter(t => t.priority === TaskPriority.Critical && t.status !== 'done').length;
-    const totalHours = tasks.reduce((s, t) => s + t.estimatedHours, 0);
-    const doneHours = tasks.filter(t => t.status === 'done').reduce((s, t) => s + t.estimatedHours, 0);
-    return { total, done, critical, blocked: blockedTasks.length, ready: readyTasks.length, totalHours, doneHours };
-  }, [tasks, blockedTasks, readyTasks]);
-
-  // ── Actions ───────────────────────────────────────────────────────────────
-  const addTask = useCallback(() => {
-    if (!newTaskTitle) return;
-    const task = createTask({
-      title: newTaskTitle,
-      assignedTo: newTaskAssignee || 'Unassigned',
-      deadline: newTaskDeadline || 'No Deadline',
-      priority: newTaskPriority,
-      complexity: newTaskComplexity,
-      estimatedHours: parseInt(newTaskHours) || 4,
-      dependencies: newTaskDeps,
-      tags: [],
-    });
-    setTasks(prev => rankTasks([task, ...prev]));
-    setNewTaskTitle('');
-    setNewTaskAssignee('');
-    setNewTaskDeadline('');
-    setNewTaskPriority(TaskPriority.Medium);
-    setNewTaskComplexity(TaskComplexity.Moderate);
-    setNewTaskHours('4');
-    setNewTaskDeps([]);
-  }, [newTaskTitle, newTaskAssignee, newTaskDeadline, newTaskPriority, newTaskComplexity, newTaskHours, newTaskDeps]);
-
-  const updateStatus = useCallback((id: string, status: Task['status']) => {
-    setTasks(prev => rankTasks(prev.map(t => t.id === id ? { ...t, status } : t)));
-  }, []);
-
-  const deleteTask = useCallback((id: string) => {
-    setTasks(prev => rankTasks(prev.filter(t => t.id !== id)));
-  }, []);
-
-  const runScheduleOptimization = useCallback(() => {
-    const result = optimizeSchedule(tasks, TEAM_MEMBERS);
-    setSchedule(result);
-    setTasks(prev => applySchedule(prev, result));
-    setActiveTab('schedule');
-  }, [tasks]);
-
-  const generateAIBreakdown = useCallback(async () => {
-    setIsGenerating(true);
-    try {
-      const phases = await geminiService.generateTaskBreakdown(project, TEAM_MEMBERS);
-      const titleToIdMap = new Map<string, string>();
-      const allNewTasks: Task[] = [];
-
-      for (const phase of phases) {
-        const parentTask = createTask({
-          title: phase.parentTask,
-          priority: TaskPriority.High,
-          complexity: TaskComplexity.Epic,
-          estimatedHours: 0,
-          tags: ['phase'],
-        });
-        titleToIdMap.set(parentTask.title, parentTask.id);
-
-        const childIds: string[] = [];
-        for (const sub of phase.subtasks) {
-          const depIds = (sub.dependencies || [])
-            .map((depTitle: string) => titleToIdMap.get(depTitle))
-            .filter(Boolean) as string[];
-
-          const child = createTask({
-            title: sub.title,
-            description: sub.description,
-            assignedTo: sub.assignedTo || 'Unassigned',
-            deadline: sub.deadline || 'No Deadline',
-            priority: (sub.priority as TaskPriority) || TaskPriority.Medium,
-            complexity: (sub.complexity as TaskComplexity) || TaskComplexity.Moderate,
-            estimatedHours: sub.estimatedHours || 4,
-            dependencies: depIds,
-            parentTaskId: parentTask.id,
-            tags: sub.tags || [],
-          });
-          titleToIdMap.set(sub.title, child.id);
-          childIds.push(child.id);
-          allNewTasks.push(child);
-        }
-
-        parentTask.subtasks = childIds;
-        parentTask.estimatedHours = allNewTasks
-          .filter(t => childIds.includes(t.id))
-          .reduce((s, t) => s + t.estimatedHours, 0);
-        allNewTasks.push(parentTask);
-      }
-
-      setTasks(rankTasks(allNewTasks));
-    } catch (err) {
-      console.error('AI breakdown failed:', err);
-    } finally {
-      setIsGenerating(false);
-    }
-  }, [project]);
-
-  const toggleExpand = (id: string) => {
-    setExpandedTasks(prev => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+const NotificationToast: React.FC<{
+  notification: AppNotification;
+  onDismiss: (id: string) => void;
+  onRead: (id: string) => void;
+}> = ({ notification, onDismiss, onRead }) => {
+  const typeStyles: Record<string, string> = {
+    overdue: 'border-l-red-500 bg-red-50',
+    'critical-path': 'border-l-orange-500 bg-orange-50',
+    chatbot: 'border-l-indigo-500 bg-indigo-50',
+    milestone: 'border-l-purple-500 bg-purple-50',
+    mention: 'border-l-blue-500 bg-blue-50',
+    info: 'border-l-slate-400 bg-slate-50',
+  };
+  const typeIcons: Record<string, React.ReactNode> = {
+    overdue: <AlertTriangle size={14} className="text-red-500" />,
+    'critical-path': <Flame size={14} className="text-orange-500" />,
+    chatbot: <Zap size={14} className="text-indigo-500" />,
+    milestone: <Target size={14} className="text-purple-500" />,
+    mention: <Users size={14} className="text-blue-500" />,
+    info: <Bell size={14} className="text-slate-400" />,
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="h-full flex flex-col space-y-6 animate-in fade-in duration-500">
-      {/* ── Stats Cards ──────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-          <p className="text-[10px] font-bold uppercase text-slate-400 mb-1">Total Tasks</p>
-          <p className="text-2xl font-bold text-slate-800">{stats.total}</p>
-        </div>
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-          <p className="text-[10px] font-bold uppercase text-emerald-500 mb-1">Completed</p>
-          <p className="text-2xl font-bold text-emerald-600">{stats.done}</p>
-        </div>
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-          <p className="text-[10px] font-bold uppercase text-red-400 mb-1">Critical</p>
-          <p className="text-2xl font-bold text-red-600">{stats.critical}</p>
-        </div>
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-          <p className="text-[10px] font-bold uppercase text-rose-400 mb-1">Blocked</p>
-          <p className="text-2xl font-bold text-rose-500">{stats.blocked}</p>
-        </div>
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-          <p className="text-[10px] font-bold uppercase text-blue-400 mb-1">Ready to Start</p>
-          <p className="text-2xl font-bold text-blue-600">{stats.ready}</p>
-        </div>
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-          <p className="text-[10px] font-bold uppercase text-indigo-400 mb-1">Hours Left</p>
-          <p className="text-2xl font-bold text-indigo-600">{stats.totalHours - stats.doneHours}<span className="text-sm text-slate-400">/{stats.totalHours}h</span></p>
-        </div>
+    <div
+      className={`border-l-4 rounded-r-lg p-3 flex items-start gap-3 shadow-sm transition-all ${
+        typeStyles[notification.type] || typeStyles.info
+      } ${notification.read ? 'opacity-60' : ''}`}
+    >
+      <div className="shrink-0 mt-0.5">{typeIcons[notification.type]}</div>
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-semibold text-slate-800 truncate">{notification.title}</p>
+        <p className="text-[11px] text-slate-600 mt-0.5 line-clamp-2">{notification.message}</p>
+        <p className="text-[10px] text-slate-400 mt-1">
+          {new Date(notification.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        </p>
       </div>
-
-      {/* ── Team Members ─────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {TEAM_MEMBERS.map((member, i) => {
-          const memberTasks = tasks.filter(t => t.assignedTo === member && t.status !== 'done');
-          const memberHours = memberTasks.reduce((s, t) => s + t.estimatedHours, 0);
-          return (
-            <div key={member} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
-              <img src={`https://picsum.photos/seed/${i + 1}/48/48`} className="w-12 h-12 rounded-full border-2 border-indigo-200" alt={member} />
-              <div className="flex-1 min-w-0">
-                <h4 className="font-bold text-slate-800 text-sm">{member}</h4>
-                <p className="text-[10px] text-slate-400">{memberTasks.length} tasks · {memberHours}h remaining</p>
-              </div>
-            </div>
-          );
-        })}
-        <button className="bg-slate-50 p-4 rounded-2xl border border-dashed border-slate-300 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:border-indigo-400 transition-all gap-2">
-          <Plus size={18} />
-          <span className="text-xs font-bold uppercase tracking-wider">Invite</span>
-        </button>
-      </div>
-
-      {/* ── Action Buttons ───────────────────────────────────────────── */}
-      <div className="flex flex-wrap gap-3">
-        <button
-          onClick={generateAIBreakdown}
-          disabled={isGenerating}
-          className="flex items-center gap-2 bg-gradient-to-r from-violet-600 to-indigo-600 text-white px-5 py-2.5 rounded-xl font-semibold text-sm hover:shadow-lg hover:shadow-indigo-200 transition-all disabled:opacity-50"
-        >
-          {isGenerating ? <Loader2 size={16} className="animate-spin" /> : <Brain size={16} />}
-          {isGenerating ? 'AI is Breaking Down...' : 'AI Smart Breakdown'}
-        </button>
-        <button
-          onClick={runScheduleOptimization}
-          className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-5 py-2.5 rounded-xl font-semibold text-sm hover:bg-slate-50 hover:shadow transition-all"
-        >
-          <Sparkles size={16} className="text-amber-500" />
-          Optimize Schedule
-        </button>
-        <button
-          onClick={() => setTasks(rankTasks(tasks))}
-          className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-5 py-2.5 rounded-xl font-semibold text-sm hover:bg-slate-50 hover:shadow transition-all"
-        >
-          <RefreshCw size={16} className="text-blue-500" />
-          Re-score Priorities
-        </button>
-      </div>
-
-      {/* ── Tabs ─────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl w-fit">
-        {(['tasks', 'schedule', 'insights'] as const).map(tab => (
+      <div className="flex items-center gap-1 shrink-0">
+        {!notification.read && (
           <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`px-5 py-2 rounded-lg text-xs font-bold uppercase transition-all ${
-              activeTab === tab ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-400 hover:text-slate-600'
-            }`}
+            onClick={() => onRead(notification.id)}
+            className="p-1 hover:bg-white/60 rounded text-slate-400 hover:text-green-600"
+            title="Mark read"
           >
-            {tab === 'tasks' && <span className="flex items-center gap-1.5"><Tag size={13} /> Tasks</span>}
-            {tab === 'schedule' && <span className="flex items-center gap-1.5"><Calendar size={13} /> Schedule</span>}
-            {tab === 'insights' && <span className="flex items-center gap-1.5"><BarChart3 size={13} /> Insights</span>}
+            <Check size={12} />
           </button>
-        ))}
+        )}
+        <button
+          onClick={() => onDismiss(notification.id)}
+          className="p-1 hover:bg-white/60 rounded text-slate-400 hover:text-red-500"
+          title="Dismiss"
+        >
+          <X size={12} />
+        </button>
       </div>
+    </div>
+  );
+};
 
-      {/* ── Tab: Tasks ───────────────────────────────────────────────── */}
-      {activeTab === 'tasks' && (
-        <div className="flex-1 bg-white border border-slate-200 rounded-[24px] shadow-sm flex flex-col overflow-hidden">
-          {/* Controls */}
-          <div className="p-5 border-b border-slate-100 space-y-4 shrink-0">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-              <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                <Tag className="text-indigo-600" size={18} /> Smart Task Board
-              </h3>
-              <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-100">
-                {(['all', 'todo', 'in-progress', 'blocked', 'done'] as const).map(s => (
-                  <button
-                    key={s}
-                    onClick={() => setStatusFilter(s)}
-                    className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all ${
-                      statusFilter === s ? 'bg-white text-indigo-700 shadow-sm border border-slate-200' : 'text-slate-400 hover:text-slate-600'
-                    }`}
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </div>
+// ════════════════════════════════════════════════════════════════════════════
+// ── Notification Bell Dropdown ───────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
 
-            <div className="flex flex-col lg:flex-row items-center gap-3">
-              <div className="relative flex-1 w-full">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Filter by title, member or tag..."
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 bg-slate-50 rounded-xl text-sm border border-transparent focus:bg-white focus:border-indigo-500 outline-none transition-all"
-                />
-              </div>
-              <div className="flex items-center gap-2 w-full lg:w-auto">
-                <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1 uppercase"><ArrowUpDown size={12} /> Sort:</span>
-                <select
-                  value={sortBy}
-                  onChange={e => setSortBy(e.target.value as typeof sortBy)}
-                  className="bg-slate-50 text-xs font-bold px-3 py-2 rounded-xl border border-transparent focus:border-indigo-500 outline-none"
-                >
-                  <option value="priorityScore">Priority Score</option>
-                  <option value="deadline">Deadline</option>
-                  <option value="assignee">Assignee</option>
-                  <option value="status">Status</option>
-                </select>
-              </div>
-            </div>
+const NotificationBell: React.FC = () => {
+  const [open, setOpen] = useState(false);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const ref = useRef<HTMLDivElement>(null);
 
-            {/* New Task Form */}
-            <div className="bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100/50">
-              <div className="flex flex-col xl:flex-row items-end gap-3">
-                <div className="flex-1 w-full space-y-1">
-                  <label className="text-[10px] font-bold text-indigo-600 uppercase ml-1">Task Title</label>
-                  <input
-                    type="text"
-                    value={newTaskTitle}
-                    onChange={e => setNewTaskTitle(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && addTask()}
-                    placeholder="What needs to be done?"
-                    className="w-full px-3 py-2 text-sm border border-indigo-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
-                  />
-                </div>
-                <div className="w-full xl:w-36 space-y-1">
-                  <label className="text-[10px] font-bold text-indigo-600 uppercase ml-1">Assignee</label>
-                  <select
-                    value={newTaskAssignee}
-                    onChange={e => setNewTaskAssignee(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-indigo-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
-                  >
-                    <option value="">Auto-assign</option>
-                    {TEAM_MEMBERS.map(m => <option key={m} value={m}>{m}</option>)}
-                  </select>
-                </div>
-                <div className="w-full xl:w-36 space-y-1">
-                  <label className="text-[10px] font-bold text-indigo-600 uppercase ml-1">Deadline</label>
-                  <input
-                    type="date"
-                    value={newTaskDeadline}
-                    onChange={e => setNewTaskDeadline(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-indigo-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
-                  />
-                </div>
-                <div className="w-full xl:w-32 space-y-1">
-                  <label className="text-[10px] font-bold text-indigo-600 uppercase ml-1">Priority</label>
-                  <select
-                    value={newTaskPriority}
-                    onChange={e => setNewTaskPriority(e.target.value as TaskPriority)}
-                    className="w-full px-3 py-2 text-sm border border-indigo-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
-                  >
-                    {PRIORITY_OPTIONS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-                  </select>
-                </div>
-                <div className="w-full xl:w-32 space-y-1">
-                  <label className="text-[10px] font-bold text-indigo-600 uppercase ml-1">Complexity</label>
-                  <select
-                    value={newTaskComplexity}
-                    onChange={e => setNewTaskComplexity(Number(e.target.value) as TaskComplexity)}
-                    className="w-full px-3 py-2 text-sm border border-indigo-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
-                  >
-                    {COMPLEXITY_OPTIONS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-                  </select>
-                </div>
-                <div className="w-full xl:w-24 space-y-1">
-                  <label className="text-[10px] font-bold text-indigo-600 uppercase ml-1">Est. Hours</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={100}
-                    value={newTaskHours}
-                    onChange={e => setNewTaskHours(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-indigo-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
-                  />
-                </div>
+  useEffect(() => {
+    const unsub = subscribeNotifications(setNotifications);
+    return unsub;
+  }, []);
+
+  // Close on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const unreadCount = notifications.filter(n => !n.read).length;
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className={`relative p-2 rounded-lg transition-colors ${
+          open ? 'bg-indigo-50 text-indigo-600' : 'text-slate-500 hover:bg-slate-100'
+        }`}
+      >
+        {unreadCount > 0 ? <BellRing size={18} className="animate-pulse" /> : <Bell size={18} />}
+        {unreadCount > 0 && (
+          <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full border-2 border-white">
+            {unreadCount > 9 ? '9+' : unreadCount}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-2 w-80 max-h-96 bg-white rounded-xl border border-slate-200 shadow-xl z-50 overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+            <h4 className="text-sm font-bold text-slate-800">Notifications</h4>
+            <div className="flex gap-2">
+              {unreadCount > 0 && (
                 <button
-                  onClick={addTask}
-                  className="bg-indigo-600 text-white p-2.5 rounded-xl hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 shrink-0"
-                  title="Add Task"
+                  onClick={() => markAllAsRead()}
+                  className="text-[11px] text-indigo-600 hover:underline"
                 >
-                  <Plus size={18} />
+                  Mark all read
                 </button>
-              </div>
+              )}
+              {notifications.length > 0 && (
+                <button
+                  onClick={() => clearAllNotifications()}
+                  className="text-[11px] text-slate-400 hover:text-red-500"
+                >
+                  Clear all
+                </button>
+              )}
             </div>
           </div>
-
-          {/* Task List */}
-          <div className="flex-1 overflow-y-auto p-5 space-y-2 scroll-smooth">
-            {filteredAndSortedTasks.length > 0 ? (
-              filteredAndSortedTasks.map(task => {
-                const isPhase = task.subtasks && task.subtasks.length > 0;
-                const isExpanded = expandedTasks.has(task.id);
-                const childTasks = isPhase ? tasks.filter(t => task.subtasks!.includes(t.id)) : [];
-
-                return (
-                  <React.Fragment key={task.id}>
-                    <div
-                      className={`flex items-center gap-3 p-4 rounded-2xl border transition-all group ${
-                        task.criticalPath ? 'bg-red-50/30 border-red-200/50 hover:bg-red-50/50' :
-                        task.status === 'blocked' ? 'bg-rose-50/30 border-rose-100 hover:bg-rose-50/50' :
-                        'bg-slate-50/50 border-slate-100 hover:bg-white hover:shadow-md'
-                      }`}
-                    >
-                      {/* Expand or Status toggle */}
-                      {isPhase ? (
-                        <button onClick={() => toggleExpand(task.id)} className="text-slate-400 hover:text-indigo-600 transition">
-                          {isExpanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => updateStatus(task.id, task.status === 'done' ? 'todo' : task.status === 'todo' ? 'in-progress' : 'done')}
-                          className="transition-colors"
-                        >
-                          <StatusIcon status={task.status} />
-                        </button>
-                      )}
-
-                      {/* Content */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className={`font-bold text-sm text-slate-800 ${task.status === 'done' ? 'line-through opacity-40' : ''}`}>
-                            {task.title}
-                          </p>
-                          <PriorityBadge priority={task.priority} />
-                          {task.criticalPath && (
-                            <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 border border-red-200 flex items-center gap-0.5">
-                              <Zap size={9} /> Critical Path
-                            </span>
-                          )}
-                          {task.dependencies.length > 0 && (
-                            <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-violet-50 text-violet-600 border border-violet-200 flex items-center gap-0.5">
-                              <GitBranch size={9} /> {task.dependencies.length} dep{task.dependencies.length > 1 ? 's' : ''}
-                            </span>
-                          )}
-                        </div>
-                        {task.description && (
-                          <p className="text-[11px] text-slate-400 mt-0.5 truncate max-w-lg">{task.description}</p>
-                        )}
-                        <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                          <span className="text-[10px] text-slate-500 font-medium flex items-center gap-1 bg-white px-2 py-0.5 rounded-lg border border-slate-100">
-                            <User size={10} className="text-indigo-400" /> {task.assignedTo}
-                          </span>
-                          <span className="text-[10px] text-slate-500 font-medium flex items-center gap-1 bg-white px-2 py-0.5 rounded-lg border border-slate-100">
-                            <Calendar size={10} /> {task.deadline}
-                          </span>
-                          <span className="text-[10px] text-slate-500 font-medium flex items-center gap-1 bg-white px-2 py-0.5 rounded-lg border border-slate-100">
-                            <Clock size={10} /> {task.estimatedHours}h
-                          </span>
-                          {task.scheduledStart && task.scheduledEnd && (
-                            <span className="text-[10px] text-indigo-500 font-medium flex items-center gap-1 bg-indigo-50 px-2 py-0.5 rounded-lg border border-indigo-100">
-                              <Sparkles size={10} /> {task.scheduledStart} → {task.scheduledEnd}
-                            </span>
-                          )}
-                          {task.tags.map(tag => (
-                            <span key={tag} className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-500 border border-indigo-100">
-                              {tag}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Score bar */}
-                      <div className="hidden md:block">
-                        <ScoreBar score={task.priorityScore} />
-                      </div>
-
-                      {/* Actions */}
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {task.status === 'todo' && (
-                          <button onClick={() => updateStatus(task.id, 'in-progress')} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="Start">
-                            <Clock size={16} />
-                          </button>
-                        )}
-                        {task.status === 'blocked' && (
-                          <button onClick={() => updateStatus(task.id, 'todo')} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all" title="Unblock">
-                            <RefreshCw size={16} />
-                          </button>
-                        )}
-                        <button onClick={() => deleteTask(task.id)} className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all" title="Delete">
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Expanded children */}
-                    {isPhase && isExpanded && childTasks.map(child => (
-                      <div
-                        key={child.id}
-                        className={`ml-10 flex items-center gap-3 p-3 rounded-xl border transition-all group ${
-                          child.status === 'blocked' ? 'bg-rose-50/30 border-rose-100' : 'bg-slate-50/30 border-slate-100 hover:bg-white hover:shadow-sm'
-                        }`}
-                      >
-                        <button
-                          onClick={() => updateStatus(child.id, child.status === 'done' ? 'todo' : child.status === 'todo' ? 'in-progress' : 'done')}
-                          className="transition-colors"
-                        >
-                          <StatusIcon status={child.status} />
-                        </button>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className={`font-semibold text-xs text-slate-700 ${child.status === 'done' ? 'line-through opacity-40' : ''}`}>
-                              {child.title}
-                            </p>
-                            <PriorityBadge priority={child.priority} />
-                          </div>
-                          {child.description && (
-                            <p className="text-[10px] text-slate-400 mt-0.5 truncate max-w-md">{child.description}</p>
-                          )}
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className="text-[9px] text-slate-400 font-medium flex items-center gap-1">
-                              <User size={9} /> {child.assignedTo}
-                            </span>
-                            <span className="text-[9px] text-slate-400 font-medium flex items-center gap-1">
-                              <Clock size={9} /> {child.estimatedHours}h
-                            </span>
-                            <span className="text-[9px] text-slate-400 font-medium flex items-center gap-1">
-                              <Calendar size={9} /> {child.deadline}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="hidden md:block"><ScoreBar score={child.priorityScore} /></div>
-                        <button onClick={() => deleteTask(child.id)} className="p-1 text-slate-300 hover:text-rose-500 rounded-lg transition-all opacity-0 group-hover:opacity-100">
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    ))}
-                  </React.Fragment>
-                );
-              })
-            ) : (
-              <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-                <Search size={40} className="mb-2 opacity-20" />
-                <p className="font-medium">No tasks found matching your criteria.</p>
+          <div className="overflow-y-auto max-h-72 p-2 space-y-2">
+            {notifications.length === 0 ? (
+              <div className="py-8 text-center text-sm text-slate-400">
+                <Bell size={24} className="mx-auto mb-2 opacity-40" />
+                No notifications yet
               </div>
+            ) : (
+              notifications.map(n => (
+                <NotificationToast
+                  key={n.id}
+                  notification={n}
+                  onDismiss={dismissNotification}
+                  onRead={markAsRead}
+                />
+              ))
             )}
           </div>
         </div>
       )}
+    </div>
+  );
+};
 
-      {/* ── Tab: Schedule ────────────────────────────────────────────── */}
-      {activeTab === 'schedule' && (
-        <div className="flex-1 bg-white border border-slate-200 rounded-[24px] shadow-sm overflow-hidden flex flex-col">
-          <div className="p-6 border-b border-slate-100 shrink-0">
-            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-              <Calendar className="text-indigo-600" size={18} /> Optimized Schedule
-            </h3>
-            {!schedule && <p className="text-sm text-slate-400 mt-1">Click &quot;Optimize Schedule&quot; to generate a dependency-aware schedule.</p>}
+// ════════════════════════════════════════════════════════════════════════════
+// ── File Attachment Components ───────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+
+const FilePreviewModal: React.FC<{
+  attachment: FileAttachment;
+  onClose: () => void;
+}> = ({ attachment, onClose }) => (
+  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-8" onClick={onClose}>
+    <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[80vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+      <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className="text-lg">{getAttachmentIcon(attachment.type).emoji}</span>
+          <div>
+            <p className="text-sm font-semibold text-slate-800 truncate max-w-xs">{attachment.name}</p>
+            <p className="text-[11px] text-slate-400">{formatBytes(attachment.size)} • {attachment.uploadedBy}</p>
           </div>
-          {schedule ? (
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              {/* Summary row */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-indigo-50 p-4 rounded-xl">
-                  <p className="text-[10px] font-bold uppercase text-indigo-400 mb-1">Project Duration</p>
-                  <p className="text-xl font-bold text-indigo-700">{schedule.criticalPathLength} days</p>
-                </div>
-                <div className="bg-blue-50 p-4 rounded-xl">
-                  <p className="text-[10px] font-bold uppercase text-blue-400 mb-1">Total Effort</p>
-                  <p className="text-xl font-bold text-blue-700">{schedule.totalEstimatedHours}h</p>
-                </div>
-                <div className="bg-amber-50 p-4 rounded-xl">
-                  <p className="text-[10px] font-bold uppercase text-amber-500 mb-1">Bottlenecks</p>
-                  <p className="text-xl font-bold text-amber-700">{schedule.bottlenecks.length}</p>
-                </div>
-                <div className="bg-emerald-50 p-4 rounded-xl">
-                  <p className="text-[10px] font-bold uppercase text-emerald-400 mb-1">Tasks Scheduled</p>
-                  <p className="text-xl font-bold text-emerald-700">{schedule.slots.length}</p>
-                </div>
-              </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <a
+            href={attachment.url}
+            download={attachment.name}
+            target="_blank"
+            rel="noreferrer"
+            className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-indigo-600"
+          >
+            <Download size={16} />
+          </a>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg text-slate-500">
+            <X size={16} />
+          </button>
+        </div>
+      </div>
+      <div className="p-6 flex items-center justify-center bg-slate-50 min-h-[300px]">
+        {attachment.type === 'image' ? (
+          <img src={attachment.url} alt={attachment.name} className="max-w-full max-h-[60vh] rounded-lg shadow-md object-contain" />
+        ) : attachment.type === 'pdf' ? (
+          <iframe src={attachment.url} title={attachment.name} className="w-full h-[60vh] rounded-lg border" />
+        ) : (
+          <div className="text-center py-12">
+            <span className="text-5xl block mb-4">{getAttachmentIcon(attachment.type).emoji}</span>
+            <p className="text-sm text-slate-600 font-medium">{attachment.name}</p>
+            <a
+              href={attachment.url}
+              download={attachment.name}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700"
+            >
+              <Download size={14} /> Download File
+            </a>
+          </div>
+        )}
+      </div>
+    </div>
+  </div>
+);
 
-              {/* Resource utilization */}
-              <div>
-                <h4 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2"><TrendingUp size={14} className="text-indigo-500" /> Resource Utilization</h4>
-                <div className="space-y-2">
-                  {Object.entries(schedule.resourceUtilization).map(([member, pct]) => (
-                    <div key={member} className="flex items-center gap-3">
-                      <span className="text-xs font-bold text-slate-600 w-20">{member}</span>
-                      <div className="flex-1 h-3 bg-slate-100 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all ${pct > 85 ? 'bg-red-500' : pct > 60 ? 'bg-amber-500' : 'bg-emerald-500'}`}
-                          style={{ width: `${Math.min(pct, 100)}%` }}
-                        />
-                      </div>
-                      <span className="text-xs font-mono font-bold text-slate-500 w-10 text-right">{pct}%</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+const FileUploadZone: React.FC<{
+  onUpload: (attachment: FileAttachment) => void;
+  compact?: boolean;
+}> = ({ onUpload, compact }) => {
+  const [isDragging, setIsDragging] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-              {/* Timeline slots */}
-              <div>
-                <h4 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2"><Calendar size={14} className="text-indigo-500" /> Timeline</h4>
-                <div className="space-y-2">
-                  {schedule.slots.map(slot => {
-                    const task = tasks.find(t => t.id === slot.taskId);
-                    return (
-                      <div key={slot.taskId} className={`flex items-center gap-3 p-3 rounded-xl border ${slot.isCriticalPath ? 'bg-red-50/50 border-red-200' : 'bg-slate-50 border-slate-100'}`}>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-bold text-slate-700 truncate">{task?.title || slot.taskId}</p>
-                          <div className="flex items-center gap-2 mt-1 text-[10px] text-slate-400">
-                            <span className="flex items-center gap-1"><User size={10} /> {slot.assignee}</span>
-                            <span className="flex items-center gap-1"><Calendar size={10} /> {slot.startDate}</span>
-                            <ArrowRight size={10} />
-                            <span>{slot.endDate}</span>
-                            {slot.isCriticalPath && <span className="text-red-500 font-bold flex items-center gap-0.5"><Zap size={9} /> CRITICAL</span>}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+  const handleFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const att = await uploadFile(files[i]);
+        onUpload(att);
+      }
+    } catch (err: any) {
+      alert(err.message || 'Upload failed');
+    } finally {
+      setUploading(false);
+    }
+  };
 
-              {/* Reassignment suggestions */}
-              {schedule.suggestedReassignments.length > 0 && (
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    handleFiles(e.dataTransfer.files);
+  };
+
+  if (compact) {
+    return (
+      <>
+        <input
+          ref={inputRef}
+          type="file"
+          multiple
+          accept="image/*,.pdf,.doc,.docx,.txt,.xlsx,.pptx"
+          className="hidden"
+          onChange={e => handleFiles(e.target.files)}
+        />
+        <button
+          onClick={() => inputRef.current?.click()}
+          disabled={uploading}
+          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors disabled:opacity-50"
+          title="Attach file"
+        >
+          {uploading ? <Loader2 size={16} className="animate-spin" /> : <Paperclip size={16} />}
+        </button>
+      </>
+    );
+  }
+
+  return (
+    <div
+      onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
+      onDragLeave={() => setIsDragging(false)}
+      onDrop={handleDrop}
+      className={`border-2 border-dashed rounded-xl p-4 text-center transition-all cursor-pointer ${
+        isDragging ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 hover:border-indigo-300 hover:bg-slate-50'
+      }`}
+      onClick={() => inputRef.current?.click()}
+    >
+      <input
+        ref={inputRef}
+        type="file"
+        multiple
+        accept="image/*,.pdf,.doc,.docx,.txt,.xlsx,.pptx"
+        className="hidden"
+        onChange={e => handleFiles(e.target.files)}
+      />
+      {uploading ? (
+        <div className="flex items-center justify-center gap-2 py-2">
+          <Loader2 size={18} className="animate-spin text-indigo-500" />
+          <span className="text-sm text-indigo-600 font-medium">Uploading…</span>
+        </div>
+      ) : (
+        <>
+          <Upload size={20} className="mx-auto text-slate-400 mb-1" />
+          <p className="text-xs text-slate-500">
+            <span className="text-indigo-600 font-medium">Click to upload</span> or drag & drop
+          </p>
+          <p className="text-[10px] text-slate-400 mt-1">PDF, images, docs up to 10 MB</p>
+        </>
+      )}
+    </div>
+  );
+};
+
+const AttachmentChip: React.FC<{
+  attachment: FileAttachment;
+  onRemove?: () => void;
+  onPreview: () => void;
+}> = ({ attachment, onRemove, onPreview }) => {
+  const icon = getAttachmentIcon(attachment.type);
+  return (
+    <div className="inline-flex items-center gap-2 px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg group hover:border-indigo-200 transition-colors">
+      {attachment.thumbnailUrl ? (
+        <img src={attachment.thumbnailUrl} alt="" className="w-6 h-6 rounded object-cover" />
+      ) : (
+        <span className="text-sm">{icon.emoji}</span>
+      )}
+      <button onClick={onPreview} className="text-xs text-slate-700 font-medium truncate max-w-[120px] hover:text-indigo-600">
+        {attachment.name}
+      </button>
+      <span className="text-[10px] text-slate-400">{formatBytes(attachment.size)}</span>
+      {onRemove && (
+        <button onClick={onRemove} className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-opacity">
+          <X size={12} />
+        </button>
+      )}
+    </div>
+  );
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// ── Milestones Tab ──────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+
+const MilestonesTab: React.FC<{
+  milestones: Milestone[];
+  tasks: Task[];
+  onUpdateMilestone: (id: string, updates: Partial<Milestone>) => void;
+}> = ({ milestones, tasks, onUpdateMilestone }) => {
+
+  // Compute completion for each milestone from linked tasks
+  const enrichedMilestones = useMemo(() => {
+    return milestones.map(ms => {
+      const linkedTasks = tasks.filter(t => t.milestoneId === ms.id);
+      const totalTasks = linkedTasks.length;
+      const doneTasks = linkedTasks.filter(t => t.status === 'done').length;
+      const completionPercentage = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : (ms.completionPercentage || 0);
+
+      // AI-suggested date logic based on task deadlines + dependencies
+      let aiSuggestedDate = ms.aiSuggestedDate;
+      if (!aiSuggestedDate && linkedTasks.length > 0) {
+        const latestDeadline = linkedTasks
+          .filter(t => t.deadline && t.deadline !== 'No Deadline')
+          .sort((a, b) => new Date(b.deadline).getTime() - new Date(a.deadline).getTime())[0];
+        if (latestDeadline) {
+          const d = new Date(latestDeadline.deadline);
+          d.setDate(d.getDate() + 3); // buffer days
+          aiSuggestedDate = d.toISOString().split('T')[0];
+        }
+      }
+
+      // Status derivation
+      let status: Milestone['status'] = ms.status || 'not-started';
+      const today = new Date().toISOString().split('T')[0];
+      if (completionPercentage === 100) status = 'completed';
+      else if (ms.targetDate && ms.targetDate < today && completionPercentage < 100) status = 'overdue';
+      else if (completionPercentage > 0) status = 'in-progress';
+
+      return { ...ms, completionPercentage, aiSuggestedDate, status, linkedTaskCount: totalTasks, doneTaskCount: doneTasks };
+    });
+  }, [milestones, tasks]);
+
+  const overallProgress = enrichedMilestones.length > 0
+    ? Math.round(enrichedMilestones.reduce((s, m) => s + m.completionPercentage, 0) / enrichedMilestones.length)
+    : 0;
+
+  const statusColors: Record<string, string> = {
+    'not-started': 'bg-slate-100 text-slate-600',
+    'in-progress': 'bg-blue-100 text-blue-700',
+    completed: 'bg-emerald-100 text-emerald-700',
+    overdue: 'bg-red-100 text-red-700',
+  };
+
+  const progressBarColor = (pct: number): string => {
+    if (pct === 100) return 'bg-emerald-500';
+    if (pct >= 60) return 'bg-blue-500';
+    if (pct >= 30) return 'bg-amber-500';
+    return 'bg-slate-400';
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* ── Overall Progress Card ── */}
+      <div className="bg-gradient-to-br from-indigo-600 via-purple-600 to-violet-600 rounded-2xl p-6 text-white">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-lg font-bold">Project Milestones</h3>
+            <p className="text-indigo-200 text-sm mt-1">
+              {enrichedMilestones.filter(m => m.status === 'completed').length} of {enrichedMilestones.length} milestones complete
+            </p>
+          </div>
+          <div className="text-right">
+            <div className="text-3xl font-black">{overallProgress}%</div>
+            <p className="text-indigo-200 text-xs">Overall</p>
+          </div>
+        </div>
+        <div className="w-full bg-white/20 rounded-full h-3">
+          <div
+            className="bg-white rounded-full h-3 transition-all duration-700 ease-out"
+            style={{ width: `${overallProgress}%` }}
+          />
+        </div>
+        <div className="flex gap-4 mt-4">
+          {(['not-started', 'in-progress', 'completed', 'overdue'] as const).map(status => {
+            const count = enrichedMilestones.filter(m => m.status === status).length;
+            return (
+              <div key={status} className="text-center">
+                <div className="text-lg font-bold">{count}</div>
+                <div className="text-[10px] text-indigo-200 capitalize">{status.replace('-', ' ')}</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Milestone Timeline ── */}
+      <div className="space-y-4">
+        {enrichedMilestones.map((ms, idx) => (
+          <div
+            key={ms.id}
+            className={`bg-white rounded-xl border border-slate-200 p-5 transition-all hover:shadow-md ${
+              ms.status === 'overdue' ? 'border-l-4 border-l-red-500' :
+              ms.status === 'completed' ? 'border-l-4 border-l-emerald-500' :
+              ms.status === 'in-progress' ? 'border-l-4 border-l-blue-500' :
+              'border-l-4 border-l-slate-300'
+            }`}
+          >
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex items-start gap-3">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
+                  ms.status === 'completed' ? 'bg-emerald-100 text-emerald-700' :
+                  ms.status === 'overdue' ? 'bg-red-100 text-red-700' :
+                  ms.status === 'in-progress' ? 'bg-blue-100 text-blue-700' :
+                  'bg-slate-100 text-slate-500'
+                }`}>
+                  {ms.status === 'completed' ? <CheckCircle2 size={16} /> : idx + 1}
+                </div>
                 <div>
-                  <h4 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2"><Shield size={14} className="text-amber-500" /> Suggested Reassignments</h4>
-                  <div className="space-y-2">
-                    {schedule.suggestedReassignments.map((r, i) => {
-                      const task = tasks.find(t => t.id === r.taskId);
-                      return (
-                        <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-amber-50 border border-amber-200">
-                          <AlertTriangle size={16} className="text-amber-500 shrink-0" />
-                          <div className="flex-1 text-xs">
-                            <p className="font-bold text-slate-700">Move &quot;{task?.title}&quot; from {r.from} → {r.to}</p>
-                            <p className="text-slate-500 mt-0.5">{r.reason}</p>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                  <h4 className="font-bold text-slate-800 text-sm">{ms.title}</h4>
+                  <p className="text-xs text-slate-500 mt-0.5">{ms.phase} • {ms.duration}</p>
+                  {ms.description && (
+                    <p className="text-xs text-slate-500 mt-1 line-clamp-2">{ms.description}</p>
+                  )}
+                </div>
+              </div>
+              <span className={`px-2.5 py-1 rounded-full text-[10px] font-semibold capitalize ${statusColors[ms.status || 'not-started']}`}>
+                {(ms.status || 'not-started').replace('-', ' ')}
+              </span>
+            </div>
+
+            {/* Progress bar */}
+            <div className="mb-3">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[11px] text-slate-500">{ms.doneTaskCount}/{ms.linkedTaskCount} tasks</span>
+                <span className={`text-xs font-bold ${ms.completionPercentage === 100 ? 'text-emerald-600' : 'text-slate-700'}`}>
+                  {ms.completionPercentage}%
+                </span>
+              </div>
+              <div className="w-full bg-slate-100 rounded-full h-2.5">
+                <div
+                  className={`rounded-full h-2.5 transition-all duration-500 ease-out ${progressBarColor(ms.completionPercentage)}`}
+                  style={{ width: `${ms.completionPercentage}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Dates */}
+            <div className="flex flex-wrap gap-3 text-[11px]">
+              {ms.targetDate && (
+                <div className="flex items-center gap-1.5 text-slate-500">
+                  <Calendar size={12} />
+                  <span>Target: <span className="font-medium text-slate-700">{ms.targetDate}</span></span>
+                </div>
+              )}
+              {ms.aiSuggestedDate && (
+                <div className="flex items-center gap-1.5 text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
+                  <Zap size={11} />
+                  <span>AI Suggested: <span className="font-medium">{ms.aiSuggestedDate}</span></span>
+                </div>
+              )}
+              {ms.startDate && (
+                <div className="flex items-center gap-1.5 text-slate-500">
+                  <ArrowRight size={12} />
+                  <span>Started: {ms.startDate}</span>
                 </div>
               )}
             </div>
-          ) : (
-            <div className="flex-1 flex items-center justify-center text-slate-300">
-              <div className="text-center">
-                <Sparkles size={48} className="mx-auto mb-3 opacity-30" />
-                <p className="font-medium">Run schedule optimization to see results here</p>
+          </div>
+        ))}
+
+        {enrichedMilestones.length === 0 && (
+          <div className="text-center py-12 text-slate-400">
+            <Target size={32} className="mx-auto mb-3 opacity-40" />
+            <p className="text-sm font-medium">No milestones defined yet</p>
+            <p className="text-xs mt-1">Generate tasks from the Board tab to auto-create milestones</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// ── Main CollaborationBoard Component ───────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+
+const TEAM_MEMBERS = ['Aditya', 'Priya', 'Rahul', 'Sneha'];
+const COLUMNS: { key: Task['status']; label: string; color: string; icon: React.ReactNode }[] = [
+  { key: 'todo', label: 'To Do', color: 'border-slate-300 bg-slate-50', icon: <Circle size={14} className="text-slate-400" /> },
+  { key: 'in-progress', label: 'In Progress', color: 'border-blue-300 bg-blue-50', icon: <Timer size={14} className="text-blue-500" /> },
+  { key: 'done', label: 'Done', color: 'border-emerald-300 bg-emerald-50', icon: <CheckCircle2 size={14} className="text-emerald-500" /> },
+  { key: 'blocked', label: 'Blocked', color: 'border-red-300 bg-red-50', icon: <Shield size={14} className="text-red-500" /> },
+];
+
+const CollaborationBoard: React.FC<Props> = ({ project }) => {
+  const [tasks, setTasks] = useState<Task[]>(project.tasks || []);
+  const [milestones, setMilestones] = useState<Milestone[]>(project.roadmap || []);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [activeTab, setActiveTab] = useState<BoardTab>('board');
+  const [expandedTask, setExpandedTask] = useState<string | null>(null);
+  const [previewAttachment, setPreviewAttachment] = useState<FileAttachment | null>(null);
+  const dragItem = useRef<string | null>(null);
+
+  // ── Request notification permission on mount ──
+  useEffect(() => {
+    requestNotificationPermission();
+  }, []);
+
+  // ── Check for overdue tasks + milestone alerts periodically ──
+  useEffect(() => {
+    checkTaskAlerts(tasks);
+    checkMilestoneAlerts(milestones);
+    const interval = setInterval(() => {
+      checkTaskAlerts(tasks);
+      checkMilestoneAlerts(milestones);
+    }, 60_000); // every minute
+    return () => clearInterval(interval);
+  }, [tasks, milestones]);
+
+  // ── Link tasks to milestones based on roadmap phases ──
+  useEffect(() => {
+    if (milestones.length > 0 && tasks.length > 0) {
+      const updatedTasks = tasks.map(t => {
+        if (t.milestoneId) return t;
+        // Try to match by tags against milestone title keywords
+        for (const ms of milestones) {
+          const keywords = ms.title.toLowerCase().split(/\s+/);
+          if (t.tags.some(tag => keywords.includes(tag.toLowerCase()))) {
+            return { ...t, milestoneId: ms.id };
+          }
+        }
+        return t;
+      });
+
+      // Auto-assign unlinked tasks round-robin to milestones
+      let msIdx = 0;
+      const fullyLinked = updatedTasks.map(t => {
+        if (t.milestoneId) return t;
+        const linked = { ...t, milestoneId: milestones[msIdx % milestones.length].id };
+        msIdx++;
+        return linked;
+      });
+
+      // Only update if changed
+      if (JSON.stringify(fullyLinked) !== JSON.stringify(tasks)) {
+        setTasks(fullyLinked);
+      }
+    }
+  }, [milestones.length]); // only run when milestones first load
+
+  // ── Generate tasks via AI ──
+  const generateTasks = async () => {
+    setIsGenerating(true);
+    try {
+      const breakdowns = await geminiService.generateTaskBreakdown(project, TEAM_MEMBERS);
+      const allTasks: Task[] = [];
+      const generatedMilestones: Milestone[] = [];
+
+      let phaseIdx = 0;
+      for (const phase of breakdowns) {
+        const milestoneId = `ms-${Math.random().toString(36).substr(2, 6)}`;
+        const parentId = `parent-${Math.random().toString(36).substr(2, 6)}`;
+
+        // Create milestone from phase
+        generatedMilestones.push({
+          id: milestoneId,
+          phase: `Phase ${phaseIdx + 1}`,
+          title: phase.parentTask.replace(/^Phase \d+:\s*/, ''),
+          duration: `${phase.subtasks.length * 5}-${phase.subtasks.length * 8} days`,
+          description: `AI-generated phase encompassing ${phase.subtasks.length} tasks.`,
+          status: 'not-started',
+          completionPercentage: 0,
+          linkedTaskIds: [],
+        });
+
+        const parent = createTask({
+          id: parentId,
+          title: phase.parentTask,
+          status: 'todo',
+          assignedTo: TEAM_MEMBERS[phaseIdx % TEAM_MEMBERS.length],
+          priority: TaskPriority.High,
+          complexity: TaskComplexity.Epic,
+          estimatedHours: 0,
+          tags: ['phase'],
+          milestoneId,
+        });
+
+        const childIds: string[] = [];
+        for (const sub of phase.subtasks) {
+          const childId = `task-${Math.random().toString(36).substr(2, 6)}`;
+          childIds.push(childId);
+
+          const deps: string[] = [];
+          if (sub.dependencies && sub.dependencies.length > 0) {
+            for (const depTitle of sub.dependencies) {
+              const depTask = allTasks.find(t => t.title.toLowerCase().includes(depTitle.toLowerCase()));
+              if (depTask) deps.push(depTask.id);
+            }
+          }
+
+          allTasks.push(createTask({
+            ...sub,
+            id: childId,
+            parentTaskId: parentId,
+            dependencies: deps,
+            priority: (sub.priority as TaskPriority) || TaskPriority.Medium,
+            complexity: (sub.complexity as any as TaskComplexity) || TaskComplexity.Moderate,
+            milestoneId,
+          }));
+        }
+
+        parent.subtasks = childIds;
+        parent.estimatedHours = allTasks.filter(t => childIds.includes(t.id)).reduce((s, t) => s + t.estimatedHours, 0);
+        allTasks.push(parent);
+        phaseIdx++;
+      }
+
+      // Rank & optionally schedule
+      const ranked = rankTasks(allTasks);
+      const schedule = optimizeSchedule(ranked, TEAM_MEMBERS);
+      const scheduled = applySchedule(ranked, schedule);
+
+      // Update milestone target dates from scheduled tasks
+      for (const ms of generatedMilestones) {
+        const msTasks = scheduled.filter(t => t.milestoneId === ms.id);
+        const latestEnd = msTasks
+          .map(t => t.scheduledEnd || t.deadline)
+          .filter(d => d && d !== 'No Deadline')
+          .sort((a, b) => new Date(b!).getTime() - new Date(a!).getTime())[0];
+        if (latestEnd) {
+          ms.targetDate = latestEnd;
+          const startDates = msTasks
+            .map(t => t.scheduledStart)
+            .filter(Boolean)
+            .sort((a, b) => new Date(a!).getTime() - new Date(b!).getTime());
+          if (startDates[0]) ms.startDate = startDates[0];
+        }
+        // AI suggested date with buffer
+        if (ms.targetDate) {
+          const d = new Date(ms.targetDate);
+          d.setDate(d.getDate() + 3);
+          ms.aiSuggestedDate = d.toISOString().split('T')[0];
+        }
+      }
+
+      setTasks(scheduled);
+      setMilestones(generatedMilestones);
+
+      addNotification({
+        type: 'info',
+        title: 'Tasks Generated',
+        message: `${scheduled.length} tasks across ${generatedMilestones.length} milestones created.`,
+      });
+
+    } catch (err: any) {
+      console.error('Breakdown error:', err);
+      addNotification({
+        type: 'info',
+        title: 'Generation Failed',
+        message: err.message || 'Could not generate tasks.',
+      });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // ── Drag & drop status change ──
+  const handleDragStart = (taskId: string) => { dragItem.current = taskId; };
+
+  const handleDrop = (newStatus: Task['status']) => {
+    if (!dragItem.current) return;
+    setTasks(prev => prev.map(t =>
+      t.id === dragItem.current ? { ...t, status: newStatus } : t
+    ));
+    dragItem.current = null;
+  };
+
+  // ── Update milestone helper ──
+  const handleUpdateMilestone = (id: string, updates: Partial<Milestone>) => {
+    setMilestones(prev => prev.map(m => m.id === id ? { ...m, ...updates } : m));
+  };
+
+  // ── Task file attachment ──
+  const handleTaskAttachment = (taskId: string, attachment: FileAttachment) => {
+    setTasks(prev => prev.map(t => {
+      if (t.id !== taskId) return t;
+      return { ...t, attachments: [...(t.attachments || []), attachment] };
+    }));
+  };
+
+  const handleRemoveAttachment = (taskId: string, attachmentId: string) => {
+    setTasks(prev => prev.map(t => {
+      if (t.id !== taskId) return t;
+      return { ...t, attachments: (t.attachments || []).filter(a => a.id !== attachmentId) };
+    }));
+  };
+
+  // ── Stats ──
+  const totalTasks = tasks.filter(t => !t.subtasks?.length).length;
+  const doneTasks = tasks.filter(t => t.status === 'done' && !t.subtasks?.length).length;
+
+  const tabs: { key: BoardTab; label: string; icon: React.ReactNode }[] = [
+    { key: 'board', label: 'Board', icon: <BarChart3 size={15} /> },
+    { key: 'milestones', label: 'Milestones', icon: <Target size={15} /> },
+    { key: 'analytics', label: 'Analytics', icon: <TrendingUp size={15} /> },
+  ];
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ── RENDER ──
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  return (
+    <div className="space-y-6">
+      {/* ── Header ── */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
+            <Users size={24} className="text-indigo-600" />
+            Team Collaboration
+          </h2>
+          <p className="text-sm text-slate-500 mt-1">
+            {totalTasks} tasks • {doneTasks} completed • {milestones.length} milestones
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <NotificationBell />
+          <button
+            onClick={generateTasks}
+            disabled={isGenerating}
+            className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-colors disabled:opacity-60 shadow-lg shadow-indigo-200"
+          >
+            {isGenerating ? <Loader2 size={16} className="animate-spin" /> : <Zap size={16} />}
+            {isGenerating ? 'Generating…' : tasks.length > 0 ? 'Regenerate Tasks' : 'AI Generate Tasks'}
+          </button>
+        </div>
+      </div>
+
+      {/* ── Tabs ── */}
+      <div className="flex gap-1 bg-slate-100 rounded-xl p-1">
+        {tabs.map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all flex-1 justify-center ${
+              activeTab === tab.key
+                ? 'bg-white text-indigo-700 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            {tab.icon}
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Tab Content ── */}
+      {activeTab === 'milestones' && (
+        <MilestonesTab
+          milestones={milestones}
+          tasks={tasks}
+          onUpdateMilestone={handleUpdateMilestone}
+        />
+      )}
+
+      {activeTab === 'analytics' && (
+        <div className="space-y-6">
+          {/* Summary cards */}
+          <div className="grid grid-cols-4 gap-4">
+            {[
+              { label: 'Total Tasks', value: totalTasks, color: 'text-indigo-600 bg-indigo-50', icon: <BarChart3 size={18} /> },
+              { label: 'Completed', value: doneTasks, color: 'text-emerald-600 bg-emerald-50', icon: <CheckCircle2 size={18} /> },
+              { label: 'In Progress', value: tasks.filter(t => t.status === 'in-progress').length, color: 'text-blue-600 bg-blue-50', icon: <Timer size={18} /> },
+              { label: 'Blocked', value: tasks.filter(t => t.status === 'blocked').length, color: 'text-red-600 bg-red-50', icon: <Shield size={18} /> },
+            ].map(stat => (
+              <div key={stat.label} className="bg-white rounded-xl border border-slate-200 p-5">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3 ${stat.color}`}>{stat.icon}</div>
+                <p className="text-2xl font-bold text-slate-800">{stat.value}</p>
+                <p className="text-xs text-slate-500 mt-1">{stat.label}</p>
               </div>
+            ))}
+          </div>
+
+          {/* Team workload */}
+          <div className="bg-white rounded-xl border border-slate-200 p-5">
+            <h4 className="font-bold text-slate-800 mb-4">Team Workload</h4>
+            <div className="space-y-3">
+              {TEAM_MEMBERS.map(member => {
+                const memberTasks = tasks.filter(t => t.assignedTo === member && !t.subtasks?.length);
+                const done = memberTasks.filter(t => t.status === 'done').length;
+                const pct = memberTasks.length > 0 ? Math.round((done / memberTasks.length) * 100) : 0;
+                return (
+                  <div key={member} className="flex items-center gap-4">
+                    <div className="w-20 text-sm font-medium text-slate-700">{member}</div>
+                    <div className="flex-1 bg-slate-100 rounded-full h-3">
+                      <div className="bg-indigo-500 rounded-full h-3 transition-all duration-500" style={{ width: `${pct}%` }} />
+                    </div>
+                    <span className="text-xs text-slate-500 w-16 text-right">{done}/{memberTasks.length}</span>
+                  </div>
+                );
+              })}
             </div>
-          )}
+          </div>
+
+          {/* Critical path tasks */}
+          <div className="bg-white rounded-xl border border-slate-200 p-5">
+            <h4 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+              <Flame size={16} className="text-orange-500" /> Critical Path Tasks
+            </h4>
+            <div className="space-y-2">
+              {tasks.filter(t => t.criticalPath).length === 0 ? (
+                <p className="text-sm text-slate-400 py-4 text-center">No critical path identified yet</p>
+              ) : (
+                tasks.filter(t => t.criticalPath).map(t => (
+                  <div key={t.id} className="flex items-center gap-3 px-3 py-2 bg-orange-50 border border-orange-100 rounded-lg">
+                    <Flame size={13} className="text-orange-500 shrink-0" />
+                    <span className="text-sm text-slate-700 font-medium flex-1">{t.title}</span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+                      t.status === 'done' ? 'bg-emerald-100 text-emerald-700' :
+                      t.status === 'in-progress' ? 'bg-blue-100 text-blue-700' :
+                      'bg-slate-100 text-slate-600'
+                    }`}>{t.status}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </div>
       )}
 
-      {/* ── Tab: Insights ────────────────────────────────────────────── */}
-      {activeTab === 'insights' && (
-        <div className="flex-1 bg-white border border-slate-200 rounded-[24px] shadow-sm overflow-hidden flex flex-col">
-          <div className="p-6 border-b border-slate-100 shrink-0">
-            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-              <BarChart3 className="text-indigo-600" size={18} /> Priority Insights &amp; Analytics
-            </h3>
-          </div>
-          <div className="flex-1 overflow-y-auto p-6 space-y-6">
-            {/* Priority distribution */}
-            <div>
-              <h4 className="text-sm font-bold text-slate-700 mb-3">Priority Distribution</h4>
-              <div className="grid grid-cols-4 gap-3">
-                {PRIORITY_OPTIONS.map(p => {
-                  const count = tasks.filter(t => t.priority === p.value && t.status !== 'done').length;
-                  return (
-                    <div key={p.value} className={`p-4 rounded-xl border ${getPriorityColor(p.value)}`}>
-                      <p className="text-lg font-bold">{count}</p>
-                      <p className="text-[10px] font-bold uppercase">{p.label}</p>
+      {activeTab === 'board' && (
+        <>
+          {tasks.length === 0 ? (
+            <div className="text-center py-20">
+              <div className="w-20 h-20 bg-indigo-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <Zap size={32} className="text-indigo-400" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-700">No Tasks Yet</h3>
+              <p className="text-sm text-slate-500 mt-2 max-w-md mx-auto">
+                Click "AI Generate Tasks" to have AI break down your project into actionable tasks with dependencies, priorities, and schedules.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-4 gap-5">
+              {COLUMNS.map(col => {
+                const colTasks = tasks
+                  .filter(t => t.status === col.key && !t.parentTaskId)
+                  .sort((a, b) => b.priorityScore - a.priorityScore);
+
+                return (
+                  <div
+                    key={col.key}
+                    onDragOver={e => e.preventDefault()}
+                    onDrop={() => handleDrop(col.key)}
+                    className={`rounded-xl border-2 border-dashed p-3 min-h-[400px] ${col.color} transition-all`}
+                  >
+                    <div className="flex items-center gap-2 mb-4 px-1">
+                      {col.icon}
+                      <span className="text-sm font-bold text-slate-700">{col.label}</span>
+                      <span className="ml-auto text-xs bg-white/80 px-2 py-0.5 rounded-full font-semibold text-slate-500">
+                        {colTasks.length}
+                      </span>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
 
-            {/* Workload per member */}
-            <div>
-              <h4 className="text-sm font-bold text-slate-700 mb-3">Workload Distribution (hours)</h4>
-              <div className="space-y-2">
-                {TEAM_MEMBERS.map(member => {
-                  const memberTasks = tasks.filter(t => t.assignedTo === member && t.status !== 'done');
-                  const hours = memberTasks.reduce((s, t) => s + t.estimatedHours, 0);
-                  const maxHours = Math.max(...TEAM_MEMBERS.map(m => tasks.filter(t => t.assignedTo === m && t.status !== 'done').reduce((s, t) => s + t.estimatedHours, 0)), 1);
-                  return (
-                    <div key={member} className="flex items-center gap-3">
-                      <span className="text-xs font-bold text-slate-600 w-20">{member}</span>
-                      <div className="flex-1 h-4 bg-slate-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-indigo-500 rounded-full transition-all" style={{ width: `${(hours / maxHours) * 100}%` }} />
-                      </div>
-                      <span className="text-xs font-mono font-bold text-slate-500 w-10 text-right">{hours}h</span>
+                    <div className="space-y-3">
+                      {colTasks.map(task => {
+                        const isExpanded = expandedTask === task.id;
+
+                        return (
+                          <div
+                            key={task.id}
+                            draggable
+                            onDragStart={() => handleDragStart(task.id)}
+                            className="bg-white rounded-xl border border-slate-200 p-3 cursor-grab active:cursor-grabbing hover:shadow-md transition-all group"
+                          >
+                            {/* Header */}
+                            <div className="flex items-start gap-2">
+                              <button onClick={() => setExpandedTask(isExpanded ? null : task.id)} className="shrink-0 mt-0.5">
+                                {isExpanded ? <ChevronDown size={14} className="text-slate-400" /> : <ChevronRight size={14} className="text-slate-400" />}
+                              </button>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold text-slate-800 leading-tight">{task.title}</p>
+                                {task.criticalPath && (
+                                  <span className="inline-flex items-center gap-1 text-[9px] font-bold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded mt-1">
+                                    <Flame size={9} /> CRITICAL
+                                  </span>
+                                )}
+                              </div>
+                              {/* Priority Score Badge */}
+                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold text-white shrink-0 ${getScoreColor(task.priorityScore)}`}>
+                                {task.priorityScore}
+                              </div>
+                            </div>
+
+                            {/* Tags */}
+                            {task.tags.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-2 ml-6">
+                                {task.tags.slice(0, 3).map(tag => (
+                                  <span key={tag} className="text-[10px] px-2 py-0.5 bg-slate-100 text-slate-500 rounded-full">{tag}</span>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Meta row */}
+                            <div className="flex items-center gap-2 mt-2 ml-6 text-[11px] text-slate-400">
+                              <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold ${getPriorityColor(task.priority)}`}>
+                                {task.priority}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <Clock size={10} /> {task.estimatedHours}h
+                              </span>
+                              {task.deadline && task.deadline !== 'No Deadline' && (
+                                <span className="flex items-center gap-1">
+                                  <Calendar size={10} /> {task.deadline}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Assignee */}
+                            <div className="flex items-center gap-2 mt-2 ml-6">
+                              <div className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-[10px] font-bold">
+                                {task.assignedTo.charAt(0).toUpperCase()}
+                              </div>
+                              <span className="text-[11px] text-slate-500">{task.assignedTo}</span>
+                            </div>
+
+                            {/* Attachments preview */}
+                            {task.attachments && task.attachments.length > 0 && (
+                              <div className="ml-6 mt-2 flex flex-wrap gap-1">
+                                {task.attachments.map(att => (
+                                  <AttachmentChip
+                                    key={att.id}
+                                    attachment={att}
+                                    onPreview={() => setPreviewAttachment(att)}
+                                    onRemove={() => handleRemoveAttachment(task.id, att.id)}
+                                  />
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Expanded details */}
+                            {isExpanded && (
+                              <div className="mt-3 pt-3 border-t border-slate-100 ml-6 space-y-3">
+                                {task.description && (
+                                  <p className="text-xs text-slate-600">{task.description}</p>
+                                )}
+                                {task.scheduledStart && (
+                                  <div className="text-[11px] text-slate-500">
+                                    📅 Scheduled: {task.scheduledStart} → {task.scheduledEnd}
+                                  </div>
+                                )}
+                                {task.dependencies.length > 0 && (
+                                  <div className="text-[11px] text-slate-500">
+                                    🔗 Depends on: {task.dependencies.map(d => {
+                                      const dep = tasks.find(t => t.id === d);
+                                      return dep?.title || d;
+                                    }).join(', ')}
+                                  </div>
+                                )}
+
+                                {/* File upload zone for this task */}
+                                <div className="mt-2">
+                                  <p className="text-[11px] font-semibold text-slate-600 mb-1.5 flex items-center gap-1">
+                                    <Paperclip size={11} /> Attachments
+                                  </p>
+                                  <FileUploadZone onUpload={(att) => handleTaskAttachment(task.id, att)} />
+                                </div>
+
+                                {/* Subtasks */}
+                                {task.subtasks && task.subtasks.length > 0 && (
+                                  <div>
+                                    <p className="text-[11px] font-semibold text-slate-600 mb-1">Subtasks</p>
+                                    {task.subtasks.map(sid => {
+                                      const sub = tasks.find(t => t.id === sid);
+                                      if (!sub) return null;
+                                      return (
+                                        <div key={sid} className="flex items-center gap-2 py-1">
+                                          <div className={`w-1.5 h-1.5 rounded-full ${
+                                            sub.status === 'done' ? 'bg-emerald-500' :
+                                            sub.status === 'in-progress' ? 'bg-blue-500' :
+                                            sub.status === 'blocked' ? 'bg-red-500' :
+                                            'bg-slate-300'
+                                          }`} />
+                                          <span className={`text-xs ${sub.status === 'done' ? 'line-through text-slate-400' : 'text-slate-600'}`}>
+                                            {sub.title}
+                                          </span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
-                  );
-                })}
-              </div>
+                  </div>
+                );
+              })}
             </div>
+          )}
+        </>
+      )}
 
-            {/* Dependency graph summary */}
-            <div>
-              <h4 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2"><GitBranch size={14} className="text-violet-500" /> Dependency Summary</h4>
-              <div className="space-y-2">
-                {tasks.filter(t => t.dependencies.length > 0).map(t => (
-                  <div key={t.id} className="flex items-center gap-2 p-3 rounded-xl bg-violet-50/50 border border-violet-100 flex-wrap">
-                    <GitBranch size={14} className="text-violet-400 shrink-0" />
-                    <span className="text-xs font-bold text-slate-700">{t.title}</span>
-                    <span className="text-[10px] text-slate-400">depends on →</span>
-                    {t.dependencies.map(depId => {
-                      const dep = tasks.find(d => d.id === depId);
-                      return (
-                        <span key={depId} className="text-[10px] font-bold text-violet-600 bg-white px-2 py-0.5 rounded-full border border-violet-200">
-                          {dep?.title || depId}
-                        </span>
-                      );
-                    })}
-                  </div>
-                ))}
-                {tasks.filter(t => t.dependencies.length > 0).length === 0 && (
-                  <p className="text-sm text-slate-400">No dependencies defined yet. Use AI Smart Breakdown to generate dependency chains.</p>
-                )}
-              </div>
-            </div>
-
-            {/* Top priority tasks */}
-            <div>
-              <h4 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2"><Target size={14} className="text-red-500" /> Top Priority Tasks (Next Actions)</h4>
-              <div className="space-y-2">
-                {rankTasks(tasks).filter(t => t.status !== 'done').slice(0, 5).map((t, i) => (
-                  <div key={t.id} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
-                    <span className="text-xs font-bold text-indigo-600 bg-indigo-50 w-6 h-6 flex items-center justify-center rounded-full">#{i + 1}</span>
-                    <div className="flex-1">
-                      <p className="text-sm font-bold text-slate-700">{t.title}</p>
-                      <p className="text-[10px] text-slate-400">{t.assignedTo} · {t.estimatedHours}h · Due {t.deadline}</p>
-                    </div>
-                    <ScoreBar score={t.priorityScore} />
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Scoring algorithm explanation */}
-            <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200">
-              <h4 className="text-sm font-bold text-slate-700 mb-2 flex items-center gap-2"><Brain size={14} className="text-indigo-500" /> How Priority Scoring Works</h4>
-              <div className="space-y-2 text-xs text-slate-500">
-                <p>Each task receives a <strong>0-100 priority score</strong> computed from four weighted factors:</p>
-                <div className="grid grid-cols-2 gap-2 mt-2">
-                  <div className="bg-white p-3 rounded-xl border border-slate-100">
-                    <p className="font-bold text-slate-700">35% — Urgency</p>
-                    <p>Higher when deadline is closer. 100 if overdue, 0 if 30+ days away.</p>
-                  </div>
-                  <div className="bg-white p-3 rounded-xl border border-slate-100">
-                    <p className="font-bold text-slate-700">25% — Dependency Impact</p>
-                    <p>Higher when many other tasks are blocked by this one.</p>
-                  </div>
-                  <div className="bg-white p-3 rounded-xl border border-slate-100">
-                    <p className="font-bold text-slate-700">20% — Complexity / Time Ratio</p>
-                    <p>Higher when complex tasks have tight deadlines relative to estimated hours.</p>
-                  </div>
-                  <div className="bg-white p-3 rounded-xl border border-slate-100">
-                    <p className="font-bold text-slate-700">20% — Manual Priority</p>
-                    <p>Critical=100, High=75, Medium=50, Low=25 base weight.</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+      {/* ── File Preview Modal ── */}
+      {previewAttachment && (
+        <FilePreviewModal
+          attachment={previewAttachment}
+          onClose={() => setPreviewAttachment(null)}
+        />
       )}
     </div>
   );

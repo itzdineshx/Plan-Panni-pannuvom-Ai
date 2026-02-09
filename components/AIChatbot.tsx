@@ -444,12 +444,6 @@ const AIChatbot: React.FC<Props> = ({ project }) => {
                   </button>
                 ))}
               </div>
-              {project && (
-                <div className="mt-8 px-4 py-3 bg-indigo-50/70 border border-indigo-100 rounded-2xl max-w-lg w-full">
-                  <p className="text-xs text-indigo-500 font-bold uppercase tracking-wider mb-1">Project Context Active</p>
-                  <p className="text-sm text-indigo-700 font-medium">{project.title}</p>
-                </div>
-              )}
             </div>
           ) : (
             // ── Message List ─────────────────────────────────────────

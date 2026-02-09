@@ -45,7 +45,6 @@ const GuidancePanel: React.FC<Props> = ({ project }) => {
             <Workflow size={48} />
           </div>
           <div>
-            <span className="text-indigo-600 font-bold text-xs uppercase tracking-widest mb-2 block">Comprehensive Technical Guide</span>
             <h2 className="text-4xl font-bold text-slate-900 mb-3">{project.title}</h2>
             <p className="text-slate-500 leading-relaxed max-w-3xl text-lg">
               A deep technical blueprint covering architecture, data engineering, and core algorithms optimized for <span className="font-semibold text-slate-800">Final Year Implementation</span>.
