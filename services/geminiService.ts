@@ -1,5 +1,5 @@
 
-import { UserProfile, Project, VivaQuestion, Milestone, Source } from '../types';
+import { UserProfile, Project, VivaQuestion, Milestone, Source, Task, TaskBreakdown, TaskPriority, TaskComplexity } from '../types';
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1/chat/completions';
@@ -223,5 +223,54 @@ export const geminiService = {
     const responseText = await chatCompletion(systemPrompt, userPrompt);
     const parsed = extractJSON(responseText);
     return parsed.questions || parsed;
+  },
+
+  async generateTaskBreakdown(project: Partial<Project>, teamMembers: string[]): Promise<TaskBreakdown[]> {
+    const systemPrompt = `You are a senior project manager and software engineering lead specializing in academic project planning. You break down complex projects into well-defined, dependency-aware tasks with accurate time estimates. You always respond with valid JSON only.`;
+
+    const userPrompt = `
+      Break down the following academic project into granular, actionable tasks for a team of ${teamMembers.length} members: ${teamMembers.join(', ')}.
+      
+      Project Title: ${project.title}
+      Problem Statement: ${project.problemStatement}
+      Tech Stack: ${project.techStack?.map(t => t.name).join(', ') || 'To be decided'}
+      Roadmap Phases: ${project.roadmap?.map(m => m.title).join(' → ') || 'Standard 4-phase'}
+      
+      For EACH major project phase, create a parent task and break it into 3-5 subtasks.
+      
+      RULES:
+      - Every task MUST have: title, description, assignedTo (pick from team), deadline (YYYY-MM-DD format, spread over 6 months from 2026-02-09), priority (critical/high/medium/low), complexity (1=trivial, 2=simple, 3=moderate, 5=complex, 8=epic), estimatedHours, tags, dependencies (list of other task titles this depends on)
+      - Use realistic time estimates (2-40 hours per task)
+      - Create meaningful dependency chains (e.g., "Design DB Schema" must come before "Implement Backend API")
+      - Assign tasks balanced across team members
+      - Include at least 4 parent phases with 3-5 subtasks each
+      
+      Return a JSON object:
+      {
+        "phases": [
+          {
+            "parentTask": "Phase 1: Research & Planning",
+            "subtasks": [
+              {
+                "title": "...",
+                "description": "...",
+                "assignedTo": "...",
+                "status": "todo",
+                "deadline": "YYYY-MM-DD",
+                "priority": "high",
+                "complexity": 3,
+                "estimatedHours": 10,
+                "dependencies": [],
+                "tags": ["research", "planning"]
+              }
+            ]
+          }
+        ]
+      }
+    `;
+
+    const responseText = await chatCompletion(systemPrompt, userPrompt);
+    const parsed = extractJSON(responseText);
+    return parsed.phases || [];
   }
 };

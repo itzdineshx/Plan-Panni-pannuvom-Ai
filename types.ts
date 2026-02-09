@@ -87,12 +87,63 @@ export interface VivaQuestion {
   answerAdvanced: string;
 }
 
+export enum TaskPriority {
+  Critical = 'critical',
+  High = 'high',
+  Medium = 'medium',
+  Low = 'low'
+}
+
+export enum TaskComplexity {
+  Trivial = 1,
+  Simple = 2,
+  Moderate = 3,
+  Complex = 5,
+  Epic = 8
+}
+
 export interface Task {
   id: string;
   title: string;
+  description?: string;
   assignedTo: string;
-  status: 'todo' | 'in-progress' | 'done';
+  status: 'todo' | 'in-progress' | 'done' | 'blocked';
   deadline: string;
+  priority: TaskPriority;
+  priorityScore: number; // 0-100 computed score
+  complexity: TaskComplexity;
+  estimatedHours: number;
+  actualHours?: number;
+  dependencies: string[]; // IDs of tasks this depends on
+  subtasks?: string[]; // IDs of child tasks
+  parentTaskId?: string;
+  tags: string[];
+  scheduledStart?: string;
+  scheduledEnd?: string;
+  criticalPath?: boolean;
+  milestoneId?: string;
+}
+
+export interface ScheduleSlot {
+  taskId: string;
+  assignee: string;
+  startDate: string;
+  endDate: string;
+  isCriticalPath: boolean;
+}
+
+export interface ScheduleResult {
+  slots: ScheduleSlot[];
+  criticalPathLength: number; // in days
+  totalEstimatedHours: number;
+  resourceUtilization: Record<string, number>; // assignee -> percentage
+  bottlenecks: string[]; // task IDs that are bottlenecks
+  suggestedReassignments: { taskId: string; from: string; to: string; reason: string }[];
+}
+
+export interface TaskBreakdown {
+  parentTask: string;
+  subtasks: Omit<Task, 'id' | 'priorityScore' | 'scheduledStart' | 'scheduledEnd' | 'criticalPath'>[];
 }
 
 export type AppView = 'dashboard' | 'ideation' | 'guidance' | 'docs' | 'collaboration' | 'viva';

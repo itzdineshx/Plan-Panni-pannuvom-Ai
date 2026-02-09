@@ -11,7 +11,7 @@ export default defineConfig(({ mode }) => {
       },
       plugins: [react()],
       define: {
-        'process.env.OPENROUTER_API_KEY': JSON.stringify(env.OPENROUTER_API_KEY || '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'),
+        'process.env.OPENROUTER_API_KEY': JSON.stringify(env.VITE_OPENROUTER_API_KEY || env.OPENROUTER_API_KEY || ''),
       },
       resolve: {
         alias: {
