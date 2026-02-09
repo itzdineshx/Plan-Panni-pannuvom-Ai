@@ -1,0 +1,8 @@
+{
+  "name": "plan panni pannuvom v1",
+  "description": "A comprehensive AI-powered platform designed for engineering students to brainstorm, plan, and document their academic projects using Gemini AI.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
