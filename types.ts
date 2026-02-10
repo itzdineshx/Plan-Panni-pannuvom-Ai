@@ -16,6 +16,30 @@ export enum CareerGoal {
   Startup = 'Startup'
 }
 
+export enum ProjectType {
+  MiniProject = 'Mini Project',
+  MajorProject = 'Major Project',
+  Capstone = 'Capstone / Final Year Project',
+  SIH = 'Smart India Hackathon (SIH)',
+  Hackathon = 'Other Hackathon / Competition',
+  ResearchPaper = 'Research Paper / Publication'
+}
+
+export enum Methodology {
+  Agile = 'Agile / Scrum',
+  Waterfall = 'Waterfall',
+  Prototype = 'Rapid Prototyping',
+  ResearchBased = 'Research-Based (Literature → Experiment)',
+  DesignThinking = 'Design Thinking'
+}
+
+export enum ProjectComplexity {
+  Basic = 'Basic (Single module, straightforward)',
+  Moderate = 'Moderate (Multi-module with integrations)',
+  Advanced = 'Advanced (ML/DL, distributed systems, etc.)',
+  Research = 'Research-grade (Novel contribution expected)'
+}
+
 export interface Source {
   title: string;
   uri: string;
@@ -44,12 +68,23 @@ export interface Dataset {
 export interface UserProfile {
   academicLevel: AcademicLevel;
   department: string;
+  semester: string;
   skillLevel: SkillLevel;
   domainInterests: string[];
   techPreferences: string[];
   careerGoal: CareerGoal;
   timeline: string;
   interestPrompt: string;
+  projectType: ProjectType;
+  teamSize: number;
+  methodology: Methodology;
+  preferredComplexity: ProjectComplexity;
+  knowledgeAreas: string[];
+  advisorGuidelines: string;
+  budgetConstraint: string;
+  hasHardwareComponent: boolean;
+  targetPlatform: string[];
+  referenceProjects: string;
 }
 
 export interface Project {

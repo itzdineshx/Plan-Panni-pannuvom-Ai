@@ -77,16 +77,38 @@ export const geminiService = {
     const systemPrompt = `You are an expert academic mentor with deep knowledge of current research trends, IEEE publications, Smart India Hackathon (SIH) problem statements, and real-time technology trends. You always respond with valid JSON only.`;
 
     const userPrompt = `
-      Based on the user profile below, generate project ideas in two categories:
+      Based on the detailed user profile below, generate project ideas in two categories:
       1. Academic Research & SIH Themes: 3 project ideas derived from latest research trends, IEEE Xplore papers, Google Scholar, and recent Smart India Hackathon (SIH) problem statements (2024-2025).
       2. Real-time Trends: 3 project ideas derived from real-time pain points, technical challenges, and societal issues currently trending on X (formerly Twitter) and major technology news outlets.
       
+      IMPORTANT CONSTRAINTS:
+      - Ideas MUST match the student's skill level, semester, and complexity preference.
+      - Ideas should be feasible within the given timeline, budget, and team size.
+      - If hardware is involved, include hardware components in the solution.
+      - Respect faculty advisor guidelines if provided.
+      - Consider the student's known subject areas when suggesting algorithms and techniques.
+      - For Mini Projects, keep scope small (1-2 modules). For Major/Capstone, suggest full-stack solutions.
+      
       User Profile:
       Level: ${profile.academicLevel}
+      Semester: ${profile.semester}
       Dept: ${profile.department}
+      Skill Level: ${profile.skillLevel}
+      Project Type: ${profile.projectType}
+      Team Size: ${profile.teamSize} members
       Interests: ${profile.domainInterests.join(', ')}
-      Tech: ${profile.techPreferences.join(', ')}
-      Context: ${profile.interestPrompt}
+      Tech Preferences: ${profile.techPreferences.join(', ')}
+      Target Platforms: ${profile.targetPlatform.join(', ') || 'Any'}
+      Knowledge Areas: ${profile.knowledgeAreas.join(', ') || 'General'}
+      Career Goal: ${profile.careerGoal}
+      Timeline: ${profile.timeline}
+      Methodology: ${profile.methodology}
+      Complexity: ${profile.preferredComplexity}
+      Budget: ${profile.budgetConstraint}
+      Hardware Component: ${profile.hasHardwareComponent ? 'Yes' : 'No'}
+      Faculty Advisor Guidelines: ${profile.advisorGuidelines || 'None specified'}
+      Reference Projects/Papers: ${profile.referenceProjects || 'None specified'}
+      Problem Description: ${profile.interestPrompt || 'Open to suggestions'}
       
       Return a JSON object with exactly this structure:
       {

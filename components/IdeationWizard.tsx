@@ -24,6 +24,9 @@ import {
   AcademicLevel, 
   SkillLevel, 
   CareerGoal, 
+  ProjectType,
+  Methodology,
+  ProjectComplexity,
   Project,
   Source,
   AppUser,
@@ -50,12 +53,23 @@ const IdeationWizard: React.FC<Props> = ({ onComplete, currentUser, teamMembers 
   const [profile, setProfile] = useState<UserProfile>({
     academicLevel: AcademicLevel.UG,
     department: 'CSE',
+    semester: '6th Semester',
     skillLevel: SkillLevel.Intermediate,
     domainInterests: [],
     techPreferences: [],
     careerGoal: CareerGoal.Industry,
     timeline: '6 Months',
-    interestPrompt: ''
+    interestPrompt: '',
+    projectType: ProjectType.MajorProject,
+    teamSize: 3,
+    methodology: Methodology.Agile,
+    preferredComplexity: ProjectComplexity.Moderate,
+    knowledgeAreas: [],
+    advisorGuidelines: '',
+    budgetConstraint: 'Low (Free / Open-source tools only)',
+    hasHardwareComponent: false,
+    targetPlatform: [],
+    referenceProjects: ''
   });
 
   const nextStep = () => setStep(s => s + 1);
@@ -192,6 +206,24 @@ const IdeationWizard: React.FC<Props> = ({ onComplete, currentUser, teamMembers 
     }));
   };
 
+  const toggleKnowledge = (area: string) => {
+    setProfile(p => ({
+      ...p,
+      knowledgeAreas: p.knowledgeAreas.includes(area)
+        ? p.knowledgeAreas.filter(a => a !== area)
+        : [...p.knowledgeAreas, area]
+    }));
+  };
+
+  const togglePlatform = (platform: string) => {
+    setProfile(p => ({
+      ...p,
+      targetPlatform: p.targetPlatform.includes(platform)
+        ? p.targetPlatform.filter(t => t !== platform)
+        : [...p.targetPlatform, platform]
+    }));
+  };
+
   const renderIdeaCard = (idea: Partial<Project>, idx: number, type: 'academic' | 'trending') => {
     const id = `${type}-${idx}`;
     return (
@@ -232,14 +264,14 @@ const IdeationWizard: React.FC<Props> = ({ onComplete, currentUser, teamMembers 
   return (
     <div className="max-w-6xl mx-auto py-6">
       <div className="mb-12 flex justify-between items-center px-4">
-        {[1, 2, 3].map((i) => (
+        {[1, 2, 3, 4].map((i) => (
           <div key={i} className="flex items-center">
             <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all ${
               step === i ? 'bg-indigo-600 text-white shadow-lg' : step > i ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'
             }`}>
               {step > i ? <Check size={20} /> : i}
             </div>
-            {i < 3 && <div className={`w-20 md:w-32 h-1 mx-2 rounded-full ${step > i ? 'bg-emerald-500' : 'bg-slate-200'}`} />}
+            {i < 4 && <div className={`w-14 md:w-24 h-1 mx-2 rounded-full ${step > i ? 'bg-emerald-500' : 'bg-slate-200'}`} />}
           </div>
         ))}
       </div>
@@ -259,15 +291,15 @@ const IdeationWizard: React.FC<Props> = ({ onComplete, currentUser, teamMembers 
         {step === 1 && (
           <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
             <div>
-              <h2 className="text-3xl font-bold text-slate-800 mb-2">Build Your Profile</h2>
-              <p className="text-slate-500">Tell us about your academic background and domain interests.</p>
+              <h2 className="text-3xl font-bold text-slate-800 dark:text-white mb-2">Academic Profile</h2>
+              <p className="text-slate-500 dark:text-gray-400">Tell us about your academic background, team, and project context.</p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700">Academic Level</label>
+                <label className="text-sm font-semibold text-slate-700 dark:text-gray-300">Academic Level</label>
                 <select 
-                  className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                  className="w-full bg-slate-50 dark:bg-gray-700 border border-slate-200 dark:border-gray-600 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-slate-800 dark:text-white"
                   value={profile.academicLevel}
                   onChange={e => setProfile({...profile, academicLevel: e.target.value as AcademicLevel})}
                 >
@@ -276,28 +308,98 @@ const IdeationWizard: React.FC<Props> = ({ onComplete, currentUser, teamMembers 
                 </select>
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700">Department</label>
+                <label className="text-sm font-semibold text-slate-700 dark:text-gray-300">Department</label>
                 <input 
                   type="text"
-                  placeholder="e.g. CSE, IT, AI & DS"
-                  className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                  placeholder="e.g. CSE, IT, AI & DS, ECE"
+                  className="w-full bg-slate-50 dark:bg-gray-700 border border-slate-200 dark:border-gray-600 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-slate-800 dark:text-white"
                   value={profile.department}
                   onChange={e => setProfile({...profile, department: e.target.value})}
                 />
               </div>
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-700 dark:text-gray-300">Current Semester / Year</label>
+                <select 
+                  className="w-full bg-slate-50 dark:bg-gray-700 border border-slate-200 dark:border-gray-600 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-slate-800 dark:text-white"
+                  value={profile.semester}
+                  onChange={e => setProfile({...profile, semester: e.target.value})}
+                >
+                  {['3rd Semester', '4th Semester', '5th Semester', '6th Semester', '7th Semester', '8th Semester', '1st Year PG', '2nd Year PG'].map(sem => (
+                    <option key={sem} value={sem}>{sem}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-700 dark:text-gray-300">Project Type</label>
+                <select 
+                  className="w-full bg-slate-50 dark:bg-gray-700 border border-slate-200 dark:border-gray-600 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-slate-800 dark:text-white"
+                  value={profile.projectType}
+                  onChange={e => setProfile({...profile, projectType: e.target.value as ProjectType})}
+                >
+                  {Object.values(ProjectType).map(type => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-700 dark:text-gray-300">Team Size</label>
+                <select 
+                  className="w-full bg-slate-50 dark:bg-gray-700 border border-slate-200 dark:border-gray-600 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-slate-800 dark:text-white"
+                  value={profile.teamSize}
+                  onChange={e => setProfile({...profile, teamSize: parseInt(e.target.value)})}
+                >
+                  {[1, 2, 3, 4, 5, 6].map(n => (
+                    <option key={n} value={n}>{n === 1 ? 'Solo (1 member)' : `${n} members`}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-700 dark:text-gray-300">Skill Level</label>
+                <select 
+                  className="w-full bg-slate-50 dark:bg-gray-700 border border-slate-200 dark:border-gray-600 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-slate-800 dark:text-white"
+                  value={profile.skillLevel}
+                  onChange={e => setProfile({...profile, skillLevel: e.target.value as SkillLevel})}
+                >
+                  {Object.values(SkillLevel).map(level => (
+                    <option key={level} value={level}>{level}</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <div className="space-y-4">
-              <label className="text-sm font-semibold text-slate-700">Domain Interests</label>
+              <label className="text-sm font-semibold text-slate-700 dark:text-gray-300">Subjects / Knowledge Areas You're Confident In</label>
               <div className="flex flex-wrap gap-2">
-                {['Machine Learning', 'Cybersecurity', 'IoT', 'Blockchain', 'Web 3.0', 'NLP', 'Computer Vision', 'Cloud Computing', 'Quantum Computing'].map(interest => (
+                {['Data Structures', 'Algorithms', 'DBMS', 'Operating Systems', 'Computer Networks', 'Software Engineering', 'Machine Learning', 'Deep Learning', 'Web Development', 'Mobile Development', 'Embedded Systems', 'Digital Signal Processing', 'Compiler Design', 'Discrete Math', 'Statistics & Probability'].map(area => (
+                  <button
+                    key={area}
+                    onClick={() => toggleKnowledge(area)}
+                    className={`px-4 py-2 rounded-full text-xs md:text-sm font-medium border transition-all ${
+                      profile.knowledgeAreas.includes(area)
+                        ? 'bg-violet-600 border-violet-600 text-white'
+                        : 'bg-white dark:bg-gray-700 border-slate-200 dark:border-gray-600 text-slate-600 dark:text-gray-300 hover:border-violet-400'
+                    }`}
+                  >
+                    {area}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <label className="text-sm font-semibold text-slate-700 dark:text-gray-300">Domain Interests</label>
+              <div className="flex flex-wrap gap-2">
+                {['Machine Learning', 'Cybersecurity', 'IoT', 'Blockchain', 'Web 3.0', 'NLP', 'Computer Vision', 'Cloud Computing', 'Quantum Computing', 'AR/VR', 'Edge Computing', 'Healthcare Tech', 'FinTech', 'AgriTech', 'Smart City', 'Sustainability / Green Tech'].map(interest => (
                   <button
                     key={interest}
                     onClick={() => toggleInterest(interest)}
                     className={`px-4 py-2 rounded-full text-xs md:text-sm font-medium border transition-all ${
                       profile.domainInterests.includes(interest)
                         ? 'bg-indigo-600 border-indigo-600 text-white'
-                        : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-400'
+                        : 'bg-white dark:bg-gray-700 border-slate-200 dark:border-gray-600 text-slate-600 dark:text-gray-300 hover:border-indigo-400'
                     }`}
                   >
                     {interest}
@@ -306,29 +408,10 @@ const IdeationWizard: React.FC<Props> = ({ onComplete, currentUser, teamMembers 
               </div>
             </div>
 
-            <div className="space-y-4">
-              <label className="text-sm font-semibold text-slate-700">Preferred Technologies</label>
-              <div className="flex flex-wrap gap-2">
-                {['Python', 'React', 'Node.js', 'TensorFlow', 'PyTorch', 'MongoDB', 'AWS', 'Flutter', 'Next.js'].map(tech => (
-                  <button
-                    key={tech}
-                    onClick={() => toggleTech(tech)}
-                    className={`px-4 py-2 rounded-full text-xs md:text-sm font-medium border transition-all ${
-                      profile.techPreferences.includes(tech)
-                        ? 'bg-emerald-600 border-emerald-600 text-white'
-                        : 'bg-white border-slate-200 text-slate-600 hover:border-emerald-400'
-                    }`}
-                  >
-                    {tech}
-                  </button>
-                ))}
-              </div>
-            </div>
-
             <div className="flex justify-end">
               <button 
                 onClick={nextStep}
-                className="flex items-center gap-2 bg-slate-800 text-white px-8 py-3 rounded-xl font-bold hover:bg-slate-900 transition-all shadow-lg"
+                className="flex items-center gap-2 bg-slate-800 dark:bg-white dark:text-slate-900 text-white px-8 py-3 rounded-xl font-bold hover:bg-slate-900 dark:hover:bg-gray-200 transition-all shadow-lg"
               >
                 Next Step <ChevronRight size={18} />
               </button>
@@ -339,31 +422,178 @@ const IdeationWizard: React.FC<Props> = ({ onComplete, currentUser, teamMembers 
         {step === 2 && (
           <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
             <div>
-              <h2 className="text-3xl font-bold text-slate-800 mb-2">Refine Your Vision</h2>
-              <p className="text-slate-500">Describe any specific problems you're passionate about solving.</p>
+              <h2 className="text-3xl font-bold text-slate-800 dark:text-white mb-2">Project Preferences</h2>
+              <p className="text-slate-500 dark:text-gray-400">Configure technology stack, methodology, and constraints for your project.</p>
+            </div>
+
+            <div className="space-y-4">
+              <label className="text-sm font-semibold text-slate-700 dark:text-gray-300">Preferred Technologies</label>
+              <div className="flex flex-wrap gap-2">
+                {['Python', 'React', 'Node.js', 'TensorFlow', 'PyTorch', 'MongoDB', 'AWS', 'Flutter', 'Next.js', 'Django', 'FastAPI', 'Firebase', 'PostgreSQL', 'Docker', 'Kubernetes', 'OpenCV', 'Raspberry Pi', 'Arduino', 'React Native', 'Spring Boot'].map(tech => (
+                  <button
+                    key={tech}
+                    onClick={() => toggleTech(tech)}
+                    className={`px-4 py-2 rounded-full text-xs md:text-sm font-medium border transition-all ${
+                      profile.techPreferences.includes(tech)
+                        ? 'bg-emerald-600 border-emerald-600 text-white'
+                        : 'bg-white dark:bg-gray-700 border-slate-200 dark:border-gray-600 text-slate-600 dark:text-gray-300 hover:border-emerald-400'
+                    }`}
+                  >
+                    {tech}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <label className="text-sm font-semibold text-slate-700 dark:text-gray-300">Target Platform</label>
+              <div className="flex flex-wrap gap-2">
+                {['Web Application', 'Mobile App (Android)', 'Mobile App (iOS)', 'Desktop Application', 'API / Backend Service', 'IoT / Embedded', 'Browser Extension', 'CLI Tool'].map(platform => (
+                  <button
+                    key={platform}
+                    onClick={() => togglePlatform(platform)}
+                    className={`px-4 py-2 rounded-full text-xs md:text-sm font-medium border transition-all ${
+                      profile.targetPlatform.includes(platform)
+                        ? 'bg-cyan-600 border-cyan-600 text-white'
+                        : 'bg-white dark:bg-gray-700 border-slate-200 dark:border-gray-600 text-slate-600 dark:text-gray-300 hover:border-cyan-400'
+                    }`}
+                  >
+                    {platform}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-700 dark:text-gray-300">Development Methodology</label>
+                <select 
+                  className="w-full bg-slate-50 dark:bg-gray-700 border border-slate-200 dark:border-gray-600 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-slate-800 dark:text-white"
+                  value={profile.methodology}
+                  onChange={e => setProfile({...profile, methodology: e.target.value as Methodology})}
+                >
+                  {Object.values(Methodology).map(m => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-700 dark:text-gray-300">Preferred Complexity</label>
+                <select 
+                  className="w-full bg-slate-50 dark:bg-gray-700 border border-slate-200 dark:border-gray-600 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-slate-800 dark:text-white"
+                  value={profile.preferredComplexity}
+                  onChange={e => setProfile({...profile, preferredComplexity: e.target.value as ProjectComplexity})}
+                >
+                  {Object.values(ProjectComplexity).map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-700 dark:text-gray-300">Budget Constraint</label>
+                <select 
+                  className="w-full bg-slate-50 dark:bg-gray-700 border border-slate-200 dark:border-gray-600 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-slate-800 dark:text-white"
+                  value={profile.budgetConstraint}
+                  onChange={e => setProfile({...profile, budgetConstraint: e.target.value})}
+                >
+                  <option>Low (Free / Open-source tools only)</option>
+                  <option>Moderate (Some paid APIs / cloud credits)</option>
+                  <option>Flexible (Paid tools and services available)</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-700 dark:text-gray-300">Hardware Component?</label>
+                <div className="flex gap-3 pt-1">
+                  <button
+                    onClick={() => setProfile({...profile, hasHardwareComponent: false})}
+                    className={`flex-1 p-3 rounded-xl border text-sm font-medium transition-all ${
+                      !profile.hasHardwareComponent ? 'bg-indigo-50 dark:bg-indigo-900/40 border-indigo-500 text-indigo-700 dark:text-indigo-300 ring-2 ring-indigo-500/20' : 'bg-white dark:bg-gray-700 border-slate-200 dark:border-gray-600 text-slate-600 dark:text-gray-300'
+                    }`}
+                  >
+                    Software Only
+                  </button>
+                  <button
+                    onClick={() => setProfile({...profile, hasHardwareComponent: true})}
+                    className={`flex-1 p-3 rounded-xl border text-sm font-medium transition-all ${
+                      profile.hasHardwareComponent ? 'bg-indigo-50 dark:bg-indigo-900/40 border-indigo-500 text-indigo-700 dark:text-indigo-300 ring-2 ring-indigo-500/20' : 'bg-white dark:bg-gray-700 border-slate-200 dark:border-gray-600 text-slate-600 dark:text-gray-300'
+                    }`}
+                  >
+                    Includes Hardware
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-between pt-6">
+              <button 
+                onClick={prevStep}
+                className="flex items-center gap-2 text-slate-500 dark:text-gray-400 font-bold px-6 py-3 rounded-xl hover:bg-slate-100 dark:hover:bg-gray-700 transition-all"
+              >
+                <ArrowLeft size={18} /> Back
+              </button>
+              <button 
+                onClick={nextStep}
+                className="flex items-center gap-2 bg-slate-800 dark:bg-white dark:text-slate-900 text-white px-8 py-3 rounded-xl font-bold hover:bg-slate-900 dark:hover:bg-gray-200 transition-all shadow-lg"
+              >
+                Next Step <ChevronRight size={18} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {step === 3 && (
+          <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
+            <div>
+              <h2 className="text-3xl font-bold text-slate-800 dark:text-white mb-2">Refine Your Vision</h2>
+              <p className="text-slate-500 dark:text-gray-400">Describe your problem area, goals, advisor requirements, and any references.</p>
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700">Interest Prompt</label>
+              <label className="text-sm font-semibold text-slate-700 dark:text-gray-300">Interest / Problem Description</label>
               <textarea 
                 rows={4}
-                placeholder="e.g. I want to build a solution for real-time traffic monitoring in smart cities using computer vision..."
-                className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none resize-none"
+                placeholder="e.g. I want to build a solution for real-time traffic monitoring in smart cities using computer vision, addressing congestion and emergency vehicle detection..."
+                className="w-full bg-slate-50 dark:bg-gray-700 border border-slate-200 dark:border-gray-600 p-4 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none resize-none text-slate-800 dark:text-white"
                 value={profile.interestPrompt}
                 onChange={e => setProfile({...profile, interestPrompt: e.target.value})}
               />
             </div>
 
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-700 dark:text-gray-300">Faculty Advisor Guidelines / Constraints <span className="text-xs font-normal text-slate-400">(optional)</span></label>
+              <textarea 
+                rows={3}
+                placeholder="e.g. Advisor prefers ML-based projects, must include a comparison with at least 2 existing solutions, should have a publishable outcome..."
+                className="w-full bg-slate-50 dark:bg-gray-700 border border-slate-200 dark:border-gray-600 p-4 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none resize-none text-slate-800 dark:text-white"
+                value={profile.advisorGuidelines}
+                onChange={e => setProfile({...profile, advisorGuidelines: e.target.value})}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-700 dark:text-gray-300">Reference Projects or Papers <span className="text-xs font-normal text-slate-400">(optional)</span></label>
+              <textarea 
+                rows={2}
+                placeholder="e.g. YOLOv8 for object detection, PaperXYZ on traffic optimization, GitHub repo example.com/project..."
+                className="w-full bg-slate-50 dark:bg-gray-700 border border-slate-200 dark:border-gray-600 p-4 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none resize-none text-slate-800 dark:text-white"
+                value={profile.referenceProjects}
+                onChange={e => setProfile({...profile, referenceProjects: e.target.value})}
+              />
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700">Career Goal</label>
+                <label className="text-sm font-semibold text-slate-700 dark:text-gray-300">Career Goal</label>
                 <div className="grid grid-cols-1 gap-2">
                   {Object.values(CareerGoal).map(goal => (
                     <button
                       key={goal}
                       onClick={() => setProfile({...profile, careerGoal: goal})}
                       className={`p-3 text-left rounded-xl border text-sm font-medium transition-all ${
-                        profile.careerGoal === goal ? 'bg-indigo-50 border-indigo-500 text-indigo-700 ring-2 ring-indigo-500/20' : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-300'
+                        profile.careerGoal === goal ? 'bg-indigo-50 dark:bg-indigo-900/40 border-indigo-500 text-indigo-700 dark:text-indigo-300 ring-2 ring-indigo-500/20' : 'bg-white dark:bg-gray-700 border-slate-200 dark:border-gray-600 text-slate-600 dark:text-gray-300 hover:border-indigo-300'
                       }`}
                     >
                       {goal}
@@ -372,12 +602,13 @@ const IdeationWizard: React.FC<Props> = ({ onComplete, currentUser, teamMembers 
                 </div>
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700">Available Timeline</label>
+                <label className="text-sm font-semibold text-slate-700 dark:text-gray-300">Available Timeline</label>
                 <select 
-                  className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                  className="w-full bg-slate-50 dark:bg-gray-700 border border-slate-200 dark:border-gray-600 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-slate-800 dark:text-white"
                   value={profile.timeline}
                   onChange={e => setProfile({...profile, timeline: e.target.value})}
                 >
+                  <option>1 Month</option>
                   <option>3 Months</option>
                   <option>6 Months</option>
                   <option>1 Year</option>
@@ -388,7 +619,7 @@ const IdeationWizard: React.FC<Props> = ({ onComplete, currentUser, teamMembers 
             <div className="flex justify-between pt-6">
               <button 
                 onClick={prevStep}
-                className="flex items-center gap-2 text-slate-500 font-bold px-6 py-3 rounded-xl hover:bg-slate-100 transition-all"
+                className="flex items-center gap-2 text-slate-500 dark:text-gray-400 font-bold px-6 py-3 rounded-xl hover:bg-slate-100 dark:hover:bg-gray-700 transition-all"
               >
                 <ArrowLeft size={18} /> Back
               </button>
@@ -404,7 +635,7 @@ const IdeationWizard: React.FC<Props> = ({ onComplete, currentUser, teamMembers 
           </div>
         )}
 
-        {step === 3 && (
+        {step === 4 && (
           <div className="space-y-10 animate-in fade-in slide-in-from-right-4 duration-500">
             <div className="flex flex-col md:flex-row md:justify-between md:items-end gap-4">
               <div>
