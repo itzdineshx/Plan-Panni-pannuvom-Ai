@@ -4,6 +4,8 @@
 
 > *From idea to execution — plan panni pannuvom.*
 
+![Logo Preview](ppp_logo.png)
+
 ---
 
 ## 📌 Overview
