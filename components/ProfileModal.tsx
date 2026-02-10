@@ -37,38 +37,38 @@ const ProfileModal: React.FC<Props> = ({ user, onClose, onUpdated }) => {
 
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-6">
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-xl max-w-lg w-full">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-          <h3 className="text-lg font-bold text-slate-800">Profile Settings</h3>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-100 text-slate-500">
+      <div className="bg-white dark:bg-black rounded-3xl border border-slate-200 dark:border-gray-700 shadow-xl max-w-lg w-full">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-gray-700">
+          <h3 className="text-lg font-bold text-slate-800 dark:text-white">Profile Settings</h3>
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-gray-800 text-slate-500 dark:text-gray-400">
             <X size={18} />
           </button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {error && <p className="text-xs text-rose-600">{error}</p>}
+          {error && <p className="text-xs text-rose-600 dark:text-rose-400">{error}</p>}
           <div>
-            <label className="text-xs font-semibold text-slate-500">Full Name</label>
+            <label className="text-xs font-semibold text-slate-500 dark:text-gray-400">Full Name</label>
             <input
               name="fullName"
               defaultValue={user.fullName}
-              className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm"
+              className="mt-1 w-full rounded-xl border border-slate-200 dark:border-gray-600 px-4 py-2.5 text-sm bg-white dark:bg-gray-800 text-slate-900 dark:text-white"
               required
             />
           </div>
           <div>
-            <label className="text-xs font-semibold text-slate-500">Department</label>
+            <label className="text-xs font-semibold text-slate-500 dark:text-gray-400">Department</label>
             <input
               name="department"
               defaultValue={user.department || ''}
-              className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm"
+              className="mt-1 w-full rounded-xl border border-slate-200 dark:border-gray-600 px-4 py-2.5 text-sm bg-white dark:bg-gray-800 text-slate-900 dark:text-white"
             />
           </div>
           <div>
-            <label className="text-xs font-semibold text-slate-500">Academic Level</label>
+            <label className="text-xs font-semibold text-slate-500 dark:text-gray-400">Academic Level</label>
             <select
               name="academicLevel"
               defaultValue={user.academicLevel || AcademicLevel.UG}
-              className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm"
+              className="mt-1 w-full rounded-xl border border-slate-200 dark:border-gray-600 px-4 py-2.5 text-sm bg-white dark:bg-gray-800 text-slate-900 dark:text-white"
             >
               {Object.values(AcademicLevel).map(level => (
                 <option key={level} value={level}>{level}</option>
@@ -76,11 +76,11 @@ const ProfileModal: React.FC<Props> = ({ user, onClose, onUpdated }) => {
             </select>
           </div>
           <div>
-            <label className="text-xs font-semibold text-slate-500">Headline</label>
+            <label className="text-xs font-semibold text-slate-500 dark:text-gray-400">Headline</label>
             <input
               name="headline"
               defaultValue={user.headline || ''}
-              className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm"
+              className="mt-1 w-full rounded-xl border border-slate-200 dark:border-gray-600 px-4 py-2.5 text-sm bg-white dark:bg-gray-800 text-slate-900 dark:text-white"
             />
           </div>
           <button

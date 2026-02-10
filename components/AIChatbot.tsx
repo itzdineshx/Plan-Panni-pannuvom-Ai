@@ -344,7 +344,7 @@ const AIChatbot: React.FC<Props> = ({ project }) => {
       <button
         onClick={() => setIsOpen(true)}
         className="fixed bottom-6 right-6 z-[9999] group transition-transform hover:scale-105"
-        title="Ask AcademiGen AI"
+        title="Ask Plan Panni Pannuvom AI"
       >
         <div className="relative w-24 h-24 flex items-center justify-center">
           {/* Three.js Particle Orb */}
@@ -371,7 +371,7 @@ const AIChatbot: React.FC<Props> = ({ project }) => {
   return (
     <div className="fixed inset-0 z-[9999] flex flex-col bg-slate-50/95 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300">
       {/* ── Header ──────────────────────────────────────────────────── */}
-      <header className="shrink-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
+      <header className="shrink-0 bg-white dark:bg-black border-b border-slate-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="relative w-10 h-10">
             <div className="absolute inset-[-3px] rounded-full border border-indigo-300/25 orbit-ring" style={{ animationDuration: '4s' }} />
@@ -390,7 +390,7 @@ const AIChatbot: React.FC<Props> = ({ project }) => {
             </div>
           </div>
           <div>
-            <h2 className="text-lg font-bold text-slate-800 leading-tight">AcademiGen AI</h2>
+            <h2 className="text-lg font-bold text-slate-800 leading-tight">Plan Panni Pannuvom AI</h2>
             <div className="flex items-center gap-2">
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               <span className="text-[11px] text-slate-400 font-medium">
@@ -437,7 +437,7 @@ const AIChatbot: React.FC<Props> = ({ project }) => {
                   <button
                     key={i}
                     onClick={() => sendMessage(chip.label)}
-                    className="flex items-center gap-2.5 px-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm text-slate-600 hover:border-indigo-300 hover:bg-indigo-50/50 hover:text-indigo-700 transition-all text-left group"
+                    className="flex items-center gap-2.5 px-4 py-3 bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700 rounded-2xl text-sm text-slate-600 dark:text-gray-200 hover:border-indigo-300 hover:bg-indigo-50/50 hover:text-indigo-700 transition-all text-left group"
                   >
                     <span className="text-slate-400 group-hover:text-indigo-500 transition-colors">{chip.icon}</span>
                     {chip.label}
@@ -474,7 +474,7 @@ const AIChatbot: React.FC<Props> = ({ project }) => {
                       className={`rounded-2xl px-4 py-3 text-[13px] leading-relaxed ${
                         msg.role === 'user'
                           ? 'bg-indigo-600 text-white rounded-tr-md'
-                          : 'bg-white border border-slate-200 text-slate-700 rounded-tl-md shadow-sm'
+                          : 'bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700 text-slate-700 dark:text-white rounded-tl-md shadow-sm'
                       }`}
                     >
                       {msg.role === 'assistant' ? renderMarkdown(msg.content) : msg.content}
@@ -521,7 +521,7 @@ const AIChatbot: React.FC<Props> = ({ project }) => {
                       <Bot size={14} className="text-white" />
                     </div>
                   </div>
-                  <div className="bg-white border border-slate-200 rounded-2xl rounded-tl-md px-5 py-4 shadow-sm">
+                  <div className="bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700 rounded-2xl rounded-tl-md px-5 py-4 shadow-sm">
                     <div className="relative w-12 h-12">
                       <div className="absolute inset-[-4px] rounded-full border border-indigo-200/30 orbit-ring" style={{ animationDuration: '3s' }} />
                       <div className="absolute inset-0 flex items-center justify-center">
@@ -556,7 +556,7 @@ const AIChatbot: React.FC<Props> = ({ project }) => {
         <div className="absolute bottom-32 left-1/2 -translate-x-1/2 z-10">
           <button
             onClick={scrollToBottom}
-            className="bg-white border border-slate-200 rounded-full p-2 shadow-lg hover:shadow-xl transition-all hover:scale-105"
+            className="bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700 rounded-full p-2 shadow-lg hover:shadow-xl transition-all hover:scale-105"
           >
             <ArrowDown size={16} className="text-slate-500" />
           </button>
@@ -564,9 +564,9 @@ const AIChatbot: React.FC<Props> = ({ project }) => {
       )}
 
       {/* ── Input Area ──────────────────────────────────────────────── */}
-      <div className="shrink-0 border-t border-slate-200 bg-white">
+      <div className="shrink-0 border-t border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800">
         <div className="max-w-3xl mx-auto px-4 py-4">
-          <div className="relative bg-slate-50 border border-slate-200 rounded-2xl focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-100 transition-all">
+          <div className="relative bg-slate-50 dark:bg-gray-700 border border-slate-200 dark:border-gray-700 rounded-2xl focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-100 transition-all">
             <textarea
               ref={inputRef}
               value={input}
@@ -574,7 +574,7 @@ const AIChatbot: React.FC<Props> = ({ project }) => {
               onKeyDown={handleKeyDown}
               placeholder="Ask anything about your project..."
               rows={1}
-              className="w-full resize-none bg-transparent px-4 py-3 pr-14 text-sm text-slate-800 placeholder-slate-400 outline-none max-h-32 overflow-y-auto"
+              className="w-full resize-none bg-transparent px-4 py-3 pr-14 text-sm text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-gray-400 outline-none max-h-32 overflow-y-auto"
               style={{ minHeight: '44px' }}
               onInput={(e) => {
                 const target = e.target as HTMLTextAreaElement;
@@ -604,7 +604,7 @@ const AIChatbot: React.FC<Props> = ({ project }) => {
             </div>
           </div>
           <p className="text-[10px] text-slate-300 text-center mt-2">
-            AcademiGen AI can make mistakes. Verify important information independently.
+            Plan Panni Pannuvom AI can make mistakes. Verify important information independently.
           </p>
         </div>
       </div>

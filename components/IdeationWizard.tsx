@@ -244,7 +244,7 @@ const IdeationWizard: React.FC<Props> = ({ onComplete, currentUser, teamMembers 
         ))}
       </div>
 
-      <div className="bg-white p-6 md:p-10 rounded-[32px] border border-slate-200 shadow-xl shadow-slate-200/50 relative overflow-hidden min-h-[500px]">
+      <div className="bg-white dark:bg-gray-800 p-6 md:p-10 rounded-[32px] border border-slate-200 dark:border-gray-700 shadow-xl shadow-slate-200/50 relative overflow-hidden min-h-[500px]">
         {loading && (
           <div className="absolute inset-0 z-50 bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-300">
             <div className="relative mb-6">

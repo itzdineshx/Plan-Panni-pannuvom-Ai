@@ -107,16 +107,16 @@ const VivaPrepPanel: React.FC<Props> = ({ project }) => {
       </div>
 
       {loading && questions.length === 0 ? (
-        <div className="bg-white p-20 rounded-[32px] border border-slate-200 flex flex-col items-center justify-center">
+        <div className="bg-white dark:bg-gray-200 p-20 rounded-[32px] border border-slate-200 dark:border-gray-300 flex flex-col items-center justify-center">
           <Loader2 size={48} className="text-indigo-600 animate-spin mb-4" />
-          <p className="text-slate-500 font-medium">Analyzing project for potential questions...</p>
+          <p className="text-slate-500 dark:text-gray-700 font-medium">Analyzing project for potential questions...</p>
         </div>
       ) : (
         <div className="space-y-4">
           {questions.map((q, idx) => (
             <div 
               key={idx}
-              className={`bg-white rounded-[24px] border transition-all overflow-hidden ${
+              className={`bg-white dark:bg-gray-200 rounded-[24px] border transition-all overflow-hidden ${
                 expandedIndex === idx ? 'border-indigo-500 ring-4 ring-indigo-50 shadow-xl' : 'border-slate-100 hover:border-slate-300'
               }`}
             >

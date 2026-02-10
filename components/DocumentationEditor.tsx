@@ -180,7 +180,7 @@ const DocumentationEditor: React.FC<Props> = ({ project, onUpdateProject, curren
   return (
     <div className="h-full flex flex-col space-y-6">
       <div className="flex items-center justify-between">
-        <div className="flex bg-white p-1 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="flex bg-white dark:bg-gray-200 p-1 rounded-2xl border border-slate-200 dark:border-gray-300 shadow-sm">
           {[
             { id: 'abstract', label: 'Abstract', icon: Type },
             { id: 'prd', label: 'PRD', icon: FileCheck },
@@ -190,7 +190,7 @@ const DocumentationEditor: React.FC<Props> = ({ project, onUpdateProject, curren
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
               className={`flex items-center gap-2 px-6 py-2 rounded-xl text-sm font-semibold transition-all ${
-                activeTab === tab.id ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+                activeTab === tab.id ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 dark:text-gray-700 hover:text-slate-800 hover:bg-slate-50'
               }`}
             >
               <tab.icon size={16} />
@@ -216,8 +216,8 @@ const DocumentationEditor: React.FC<Props> = ({ project, onUpdateProject, curren
         </div>
       </div>
 
-      <div className="flex-1 bg-white border border-slate-200 rounded-[32px] shadow-sm overflow-hidden flex flex-col">
-        <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between shrink-0">
+      <div className="flex-1 bg-white dark:bg-gray-200 border border-slate-200 dark:border-gray-300 rounded-[32px] shadow-sm overflow-hidden flex flex-col">
+        <div className="p-4 border-b border-slate-100 bg-slate-50/50 dark:bg-gray-100 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2 text-slate-500 text-xs font-bold uppercase tracking-widest">
             <FileText size={14} />
             Editor Mode: Read-Only (Generated)
@@ -227,7 +227,7 @@ const DocumentationEditor: React.FC<Props> = ({ project, onUpdateProject, curren
           </button>
         </div>
         <div className="flex-1 p-10 overflow-y-auto text-base leading-relaxed text-slate-700 selection:bg-indigo-100 selection:text-indigo-900 font-sans">
-          <h2 className="text-3xl font-bold text-slate-900 mb-8 pb-4 border-b border-slate-100">
+          <h2 className="text-3xl font-bold text-slate-900 dark:text-gray-900 mb-8 pb-4 border-b border-slate-100 dark:border-gray-200">
             {activeTab === 'abstract' && 'Academic Abstract'}
             {activeTab === 'prd' && 'Product Requirements Document'}
             {activeTab === 'dd' && 'System Design Document'}
@@ -236,7 +236,7 @@ const DocumentationEditor: React.FC<Props> = ({ project, onUpdateProject, curren
         </div>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-3xl p-6">
+      <div className="bg-white dark:bg-gray-200 border border-slate-200 dark:border-gray-300 rounded-3xl p-6">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2 text-slate-700 font-semibold">
             <Paperclip size={16} /> Documentation Attachments

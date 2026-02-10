@@ -148,7 +148,7 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({
     <div
       ref={setNodeRef}
       style={style}
-      className={`bg-white border border-slate-200 rounded-xl p-4 mb-3 shadow-sm hover:shadow-md transition-all ${
+      className={`bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700 rounded-xl p-4 mb-3 shadow-sm hover:shadow-md transition-all ${
         isDragging ? 'opacity-50 shadow-lg' : ''
       } ${level > 0 ? 'ml-6 border-l-4 border-l-indigo-300' : ''}`}
     >
@@ -513,7 +513,7 @@ const TaskManager: React.FC<Props> = ({ project, onUpdateProject, teamMembers, c
       </div>
 
       {/* Progress Bar */}
-      <div className="bg-white p-6 rounded-xl border border-slate-200">
+      <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-slate-200 dark:border-gray-700">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-slate-800">Overall Progress</h3>
           <span className="text-sm text-slate-600">{Math.round(progressStats.progress)}% Complete</span>
@@ -590,7 +590,7 @@ const TaskManager: React.FC<Props> = ({ project, onUpdateProject, teamMembers, c
       {/* Add/Edit Task Modal would go here - simplified for now */}
       {showAddForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-xl max-w-md w-full mx-4">
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-xl max-w-md w-full mx-4">
             <h3 className="text-lg font-bold mb-4">Add New Task</h3>
             <form onSubmit={(e) => {
               e.preventDefault();

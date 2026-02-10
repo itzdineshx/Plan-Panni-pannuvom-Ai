@@ -44,12 +44,12 @@ const ProjectDashboard: React.FC<Props> = ({ projects, selectedProjectId, onSele
 
   if (projects.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-center py-20 bg-white rounded-3xl border border-dashed border-slate-300">
-        <div className="bg-indigo-50 p-6 rounded-full mb-6 text-indigo-600">
+      <div className="flex flex-col items-center justify-center h-full text-center py-20 bg-white dark:bg-gray-800 rounded-3xl border border-dashed border-slate-300 dark:border-gray-700">
+        <div className="bg-gray-700/40 p-6 rounded-full mb-6 text-indigo-600 dark:text-white">
           <Layout size={48} />
         </div>
-        <h3 className="text-2xl font-bold text-slate-800 mb-2">No Projects Found</h3>
-        <p className="text-slate-500 max-w-md mb-8">
+        <h3 className="text-2xl font-bold text-slate-800 dark:text-white mb-2">No Projects Found</h3>
+        <p className="text-slate-500 dark:text-gray-300 max-w-md mb-8">
           Start your academic journey by generating a new project idea using our AI ideation wizard.
         </p>
         <button 
@@ -66,7 +66,7 @@ const ProjectDashboard: React.FC<Props> = ({ projects, selectedProjectId, onSele
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {selectedProject && (
-        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-slate-200 dark:border-gray-700 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h3 className="text-lg font-bold text-slate-800">Project Summary</h3>
             <p className="text-sm text-slate-500">Share a quick status update with your team.</p>
@@ -88,33 +88,33 @@ const ProjectDashboard: React.FC<Props> = ({ projects, selectedProjectId, onSele
         </div>
       )}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-slate-200 dark:border-gray-700 shadow-sm">
           <div className="flex items-center justify-between mb-4">
-            <span className="text-slate-500 text-sm font-medium">Active Projects</span>
+            <span className="text-slate-500 dark:text-gray-300 text-sm font-medium">Active Projects</span>
             <div className="bg-emerald-50 text-emerald-600 p-2 rounded-lg"><Layout size={20} /></div>
           </div>
-          <p className="text-3xl font-bold text-slate-800">{projects.length}</p>
+          <p className="text-3xl font-bold text-slate-800 dark:text-white">{projects.length}</p>
         </div>
-        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-slate-200 dark:border-gray-700 shadow-sm">
           <div className="flex items-center justify-between mb-4">
-            <span className="text-slate-500 text-sm font-medium">Docs Completed</span>
+            <span className="text-slate-500 dark:text-gray-300 text-sm font-medium">Docs Completed</span>
             <div className="bg-indigo-50 text-indigo-600 p-2 rounded-lg"><BookOpen size={20} /></div>
           </div>
-          <p className="text-3xl font-bold text-slate-800">2 / {projects.length * 3}</p>
+          <p className="text-3xl font-bold text-slate-800 dark:text-white">2 / {projects.length * 3}</p>
         </div>
-        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-slate-200 dark:border-gray-700 shadow-sm">
           <div className="flex items-center justify-between mb-4">
-            <span className="text-slate-500 text-sm font-medium">Team Synergy</span>
+            <span className="text-slate-500 dark:text-gray-300 text-sm font-medium">Team Synergy</span>
             <div className="bg-orange-50 text-orange-600 p-2 rounded-lg"><Users size={20} /></div>
           </div>
-          <p className="text-3xl font-bold text-slate-800">High</p>
+          <p className="text-3xl font-bold text-slate-800 dark:text-white">High</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
+        <div className="bg-white dark:bg-gray-800 p-8 rounded-3xl border border-slate-200 dark:border-gray-700 shadow-sm">
           <div className="flex items-center justify-between mb-8">
-            <h3 className="text-xl font-bold text-slate-800">Recent Projects</h3>
+            <h3 className="text-xl font-bold text-slate-800 dark:text-white">Recent Projects</h3>
             <button onClick={onNewProject} className="text-indigo-600 font-semibold text-sm hover:underline flex items-center gap-1">
               <Plus size={16} /> New Idea
             </button>
@@ -153,8 +153,8 @@ const ProjectDashboard: React.FC<Props> = ({ projects, selectedProjectId, onSele
         </div>
 
         {selectedProject && taskStats && (
-          <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
-            <h3 className="text-xl font-bold text-slate-800 mb-8">Task Progress</h3>
+          <div className="bg-white dark:bg-gray-800 p-8 rounded-3xl border border-slate-200 dark:border-gray-700 shadow-sm">
+            <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-8">Task Progress</h3>
             
             {/* Task Statistics */}
             <div className="grid grid-cols-2 gap-4 mb-6">

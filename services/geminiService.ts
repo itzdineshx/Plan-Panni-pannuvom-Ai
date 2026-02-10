@@ -24,7 +24,7 @@ async function chatCompletion(systemPrompt: string, userPrompt: string, json = t
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
       'HTTP-Referer': window.location.origin,
-      'X-Title': 'AcademiGen',
+      'X-Title': 'Plan Panni Pannuvom',
     },
     body: JSON.stringify(body),
   });
@@ -422,7 +422,7 @@ DOCUMENT STRUCTURE (follow this EXACTLY):
     messages: { role: 'user' | 'assistant'; content: string }[],
     projectContext?: Partial<Project> | null
   ): Promise<string> {
-    const systemPrompt = `You are AcademiGen AI — an expert academic project assistant. You help students with project planning, research guidance, technical decisions, debugging, documentation, and viva preparation.
+    const systemPrompt = `You are Plan Panni Pannuvom AI — an expert academic project assistant. You help students with project planning, research guidance, technical decisions, debugging, documentation, and viva preparation.
 
 ${projectContext ? `
 CURRENT PROJECT CONTEXT:
@@ -450,7 +450,7 @@ RULES:
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
         'HTTP-Referer': window.location.origin,
-        'X-Title': 'AcademiGen',
+        'X-Title': 'Plan Panni Pannuvom',
       },
       body: JSON.stringify({
         model: MODEL,

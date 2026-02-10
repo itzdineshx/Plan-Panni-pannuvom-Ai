@@ -1,7 +1,7 @@
 import { AcademicLevel, AppUser } from '../types';
 
-const USERS_KEY = 'academigen_users';
-const SESSION_KEY = 'academigen_session';
+const USERS_KEY = 'Plan Panni Pannuvom_users';
+const SESSION_KEY = 'Plan Panni Pannuvom_session';
 
 interface AuthSession {
   userId: string;
